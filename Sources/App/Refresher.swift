@@ -6,8 +6,6 @@ struct ProviderState: Codable, Equatable {
     /// Last good data. Kept through errors so the panel never blanks out.
     var snapshot: Snapshot?
     var error: String?
-    /// The card offers Connect / Sign in. Optional so older saved state still decodes.
-    var needsConnect: Bool?
     /// Rate limit, network or server hiccup: the last numbers still stand. Optional for old state.
     var transient: Bool?
     var failures = 0
@@ -138,7 +136,6 @@ final class Refresher {
             }
             state.snapshot = snapshot
             state.error = nil
-            state.needsConnect = nil
             state.transient = nil
             state.failures = 0
             state.retryAt = nil
@@ -146,10 +143,9 @@ final class Refresher {
         case let .failure(error):
             // Signed out or credentials gone: old numbers would belong to a different (or no) account.
             switch error as? ProviderError {
-            case .notConfigured?, .needsConnect?: state.snapshot = nil
+            case .notConfigured?: state.snapshot = nil
             default: break
             }
-            if case .needsConnect? = error as? ProviderError { state.needsConnect = true } else { state.needsConnect = nil }
             state.transient = Self.isTransient(error) ? true : nil
             state.failures += 1
             state.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
@@ -180,7 +176,7 @@ final class Refresher {
     nonisolated static func isTransient(_ error: Error) -> Bool {
         switch error as? ProviderError {
         case .rateLimited?, .http?, .badResponse?: true
-        case .notConfigured?, .needsConnect?, .unauthorized?: false
+        case .notConfigured?, .unauthorized?: false
         case nil: error is URLError
         }
     }

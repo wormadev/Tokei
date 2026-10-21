@@ -4,8 +4,6 @@ import Synchronization
 struct ClaudeProvider: UsageProvider {
     let id = ProviderID.claude
     static let keychainService = "Claude Code-credentials"
-    /// Set once the user clicked Connect and allowed Keychain access.
-    static let keychainConnectedKey = "claude.keychainConnected"
 
     struct Credentials: Decodable {
         struct OAuth: Decodable {
@@ -36,18 +34,10 @@ struct ClaudeProvider: UsageProvider {
             .flatMap { $0.claudeAiOauth == nil ? nil : $0 }
     }
 
-    static func readKeychain(allowUI: Bool) -> Credentials? {
-        Keychain.read(service: keychainService, allowUI: allowUI)
+    static func readKeychain() -> Credentials? {
+        Keychain.readViaSecurityTool(service: keychainService)
             .flatMap { try? JSONDecoder().decode(Credentials.self, from: $0) }
             .flatMap { $0.claudeAiOauth == nil ? nil : $0 }
-    }
-
-    /// Settings › Connect: the one place that may show the Keychain prompt.
-    @discardableResult
-    static func connect() -> Bool {
-        guard readKeychain(allowUI: true) != nil else { return false }
-        UserDefaults.standard.set(true, forKey: keychainConnectedKey)
-        return true
     }
 
     /// Claude Code keeps the live token in the Keychain on macOS; the file is often stale.
@@ -55,14 +45,7 @@ struct ClaudeProvider: UsageProvider {
     static func resolveCredentials() throws -> Credentials {
         let file = readFile()
         if let file, !file.isExpired { return file }
-        let connected = UserDefaults.standard.bool(forKey: keychainConnectedKey)
-        if connected, let keychain = readKeychain(allowUI: false) { return keychain }
-        if Keychain.exists(service: keychainService) {
-            // Claude Code re-creating its item resets the Always Allow grant.
-            throw ProviderError.needsConnect(connected
-                ? "Keychain access was reset. Connect again and choose Always Allow."
-                : "Connect to read Claude Code's sign-in.")
-        }
+        if let keychain = readKeychain() { return keychain }
         if let file { return file }
         throw ProviderError.notConfigured("Run `claude` and sign in.")
     }

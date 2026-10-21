@@ -41,11 +41,6 @@ struct RefresherTests {
         #expect(refresher.states[.claude]?.snapshot == nil)
         #expect(refresher.states[.claude]?.error == "Sign in")
 
-        refresher.apply(.failure(ProviderError.needsConnect("Connect")), to: .claude, now: now)
-        #expect(refresher.states[.claude]?.needsConnect == true)
-        refresher.apply(.success(snapshot(used: 0.1, at: now)), to: .claude, now: now)
-        #expect(refresher.states[.claude]?.needsConnect == nil)
-
         refresher.clear(.claude)
         #expect(refresher.states[.claude] == nil)
     }
@@ -87,7 +82,7 @@ struct TransientErrorTests {
         #expect(Refresher.isTransient(ProviderError.http(503)))
         #expect(Refresher.isTransient(URLError(.notConnectedToInternet)))
         #expect(!Refresher.isTransient(ProviderError.unauthorized("x")))
-        #expect(!Refresher.isTransient(ProviderError.needsConnect("x")))
+        #expect(!Refresher.isTransient(ProviderError.notConfigured("x")))
     }
 }
 
