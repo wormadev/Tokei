@@ -79,7 +79,7 @@ struct SettingsView: View {
             if let id = ProviderID(rawValue: page) {
                 ProviderPage(id: id, refresher: refresher, connector: connector).id(id)
             } else {
-                GeneralSettings(installed: refresher.installed)
+                GeneralSettings()
             }
         }
     }
@@ -114,20 +114,12 @@ private struct ProviderSidebarRow: View {
 }
 
 private struct GeneralSettings: View {
-    let installed: Set<ProviderID>
     @AppStorage(Prefs.refreshIntervalKey) private var interval = 300
     @AppStorage(Prefs.refreshOnOpenKey) private var refreshOnOpen = true
-    @AppStorage(Prefs.menuBarStyleKey) private var menuBarStyle = MenuBarStyle.highest.rawValue
+    @AppStorage(Prefs.menuBarWeeklyKey) private var menuBarWeekly = false
+    @AppStorage(Prefs.menuBarSessionKey) private var menuBarSession = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
-
-    /// Providers that aren't installed can't feed the menu bar.
-    private var menuBarStyles: [MenuBarStyle] {
-        MenuBarStyle.all.filter { style in
-            if case let .provider(id) = style { return installed.contains(id) }
-            return true
-        }
-    }
 
     private var refreshFooter: String {
         switch (interval < 0, refreshOnOpen) {
@@ -153,12 +145,14 @@ private struct GeneralSettings: View {
                 Text(refreshFooter)
             }
             Section {
-                Picker("Menu bar", selection: $menuBarStyle) {
-                    ForEach(menuBarStyles) { style in
-                        Text(style.label).tag(style.rawValue)
-                        if style == .highest { Divider() }
-                    }
-                }
+                Toggle("Weekly", isOn: $menuBarWeekly)
+                Toggle("5-hour session", isOn: $menuBarSession)
+            } header: {
+                Text("Menu bar numbers")
+            } footer: {
+                Text("From the first provider in your list, next to its rings (outer weekly, inner session). With both on they stack.")
+            }
+            Section {
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, on in
                         do {
@@ -185,6 +179,7 @@ private struct DisplaySettings: View {
     @AppStorage(Prefs.showModelLimitsKey) private var showModelLimits = false
     @AppStorage(Prefs.showHistoryKey) private var showHistory = false
     @AppStorage(Prefs.absoluteResetsKey) private var absoluteResets = false
+    @AppStorage(Prefs.usageDisplayKey) private var usageDisplay = UsageDisplay.used.rawValue
 
     private var snapshots: [Snapshot] {
         refresher.enabled.compactMap { refresher.states[$0]?.snapshot }
@@ -204,6 +199,14 @@ private struct DisplaySettings: View {
                        note: "None of your providers report per-model limits right now.")
                 toggle("Usage history (7 days)", isOn: $showHistory, available: historyReady,
                        note: "Builds up as Tokei runs: one point per limit every 15 minutes.")
+            }
+            Section {
+                Picker("Show usage", selection: $usageDisplay) {
+                    ForEach(UsageDisplay.allCases) { Text($0.label).tag($0.rawValue) }
+                }
+                .pickerStyle(.segmented)
+            } footer: {
+                Text(usageDisplay == UsageDisplay.used.rawValue ? "Bars, rings and numbers fill up as you use your plan." : "Bars, rings and numbers show what's left and empty out as you use your plan.")
             }
             Section {
                 Toggle("Show reset as clock time", isOn: $absoluteResets)

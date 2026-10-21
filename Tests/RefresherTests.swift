@@ -112,18 +112,6 @@ struct FormattingTests {
         #expect(HTTP.retryAfter("Mon, 12 Jan 1970 13:46:40 GMT", now: now) == 0)
         #expect(HTTP.retryAfter(nil) == nil)
     }
-
-    @Test func `menu bar shows the most constrained primary window`() {
-        var states: [ProviderID: ProviderState] = [:]
-        let now = Date.now
-        states[.claude] = ProviderState(snapshot: Snapshot(windows: [
-            UsageWindow(id: "session", label: "", kind: .primary, used: 0.4),
-            UsageWindow(id: "opus", label: "", kind: .secondary, used: 0.99),
-        ], account: Account(), fetchedAt: now))
-        states[.codex] = ProviderState(snapshot: snapshot(used: 0.7, at: now))
-        #expect(StatusBarController.highestUsage(states, enabled: [.claude, .codex]) == 0.7)
-        #expect(StatusBarController.highestUsage(states, enabled: [.claude]) == 0.4)
-    }
 }
 
 struct MenuRingsTests {
@@ -155,15 +143,18 @@ struct MenuRingsTests {
 }
 
 struct PrefsTests {
-    @Test func `menu bar style round trips and picks its sources`() {
-        #expect(MenuBarStyle(rawValue: "icon") == .icon)
-        #expect(MenuBarStyle(rawValue: "codex") == .provider(.codex))
-        #expect(MenuBarStyle(rawValue: nil) == .highest)
-        #expect(MenuBarStyle(rawValue: "removed-provider") == .highest)
-        #expect(MenuBarStyle.provider(.codex).rawValue == "codex")
-        #expect(MenuBarStyle.icon.sources(enabled: [.claude]) == nil)
-        #expect(MenuBarStyle.highest.sources(enabled: [.claude, .codex]) == [.claude, .codex])
-        #expect(MenuBarStyle.provider(.codex).sources(enabled: [.claude]) == [.codex])
+    @Test func `usage display flips used and remaining`() {
+        #expect(UsageDisplay.used.text(0.43) == "43%")
+        #expect(UsageDisplay.remaining.text(0.43) == "57%")
+        #expect(UsageDisplay.remaining.value(1.2) == 0)
+    }
+
+    @Test func `menu bar lines stack weekly over session and label only when both`() {
+        let rings = StatusBarController.Rings(session: 0.13, weekly: 0.43)
+        #expect(StatusBarController.menuLines(rings, weekly: true, session: true, display: .used) == ["W 43%", "5h 13%"])
+        #expect(StatusBarController.menuLines(rings, weekly: false, session: true, display: .remaining) == ["87%"])
+        #expect(StatusBarController.menuLines(rings, weekly: false, session: false, display: .used).isEmpty)
+        #expect(StatusBarController.menuLines(.init(session: nil, weekly: 0.5), weekly: true, session: true, display: .used) == ["W 50%"])
     }
 
     @Test func `provider order keeps saved order and appends missing providers`() {

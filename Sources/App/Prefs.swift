@@ -3,7 +3,9 @@ import Foundation
 /// UserDefaults keys. Views bind with @AppStorage(Prefs.key); non-view code reads the statics.
 enum Prefs {
     static let refreshIntervalKey = "refreshInterval"
-    static let menuBarStyleKey = "menuBarStyle"
+    static let usageDisplayKey = "usageDisplay"
+    static let menuBarWeeklyKey = "menuBar.weekly"
+    static let menuBarSessionKey = "menuBar.session"
     static let showAccountKey = "show.account"
     static let showDetailsKey = "show.details"
     static let showModelLimitsKey = "show.modelLimits"
@@ -18,7 +20,9 @@ enum Prefs {
         var defaults: [String: Any] = [
             refreshIntervalKey: 300,
             refreshOnOpenKey: true,
-            menuBarStyleKey: MenuBarStyle.highest.rawValue,
+            usageDisplayKey: UsageDisplay.used.rawValue,
+            menuBarWeeklyKey: false,
+            menuBarSessionKey: true,
             showAccountKey: true,
             showDetailsKey: false,
             showModelLimitsKey: false,
@@ -55,44 +59,30 @@ enum Prefs {
     }
 }
 
-/// Stored as "icon", "highest" or a provider's raw value.
-enum MenuBarStyle: Hashable, Identifiable {
-    case icon, highest, provider(ProviderID)
-
-    static var all: [MenuBarStyle] { [.icon, .highest] + ProviderID.allCases.map { .provider($0) } }
-
-    init(rawValue: String?) {
-        switch rawValue {
-        case "icon": self = .icon
-        case let raw?: self = ProviderID(rawValue: raw).map { .provider($0) } ?? .highest
-        case nil: self = .highest
-        }
-    }
-
-    var rawValue: String {
-        switch self {
-        case .icon: "icon"
-        case .highest: "highest"
-        case let .provider(id): id.rawValue
-        }
-    }
-
+/// Show usage as consumed or as what's left. Bars, rings and numbers all follow it.
+enum UsageDisplay: String, CaseIterable, Identifiable {
+    case used, remaining
     var id: String { rawValue }
+
+    static var current: UsageDisplay {
+        UsageDisplay(rawValue: UserDefaults.standard.string(forKey: Prefs.usageDisplayKey) ?? "") ?? .used
+    }
 
     var label: String {
         switch self {
-        case .icon: "Icon only"
-        case .highest: "Highest usage"
-        case let .provider(id): "\(id.name) usage"
+        case .used: "As used"
+        case .remaining: "Remaining"
         }
     }
 
-    /// Providers whose usage feeds the menu bar number; nil means no number.
-    func sources(enabled: [ProviderID]) -> [ProviderID]? {
+    func value(_ used: Double) -> Double {
         switch self {
-        case .icon: nil
-        case .highest: enabled
-        case let .provider(id): [id]
+        case .used: used
+        case .remaining: max(0, 1 - used)
         }
+    }
+
+    func text(_ used: Double) -> String {
+        "\(Int((value(used) * 100).rounded()))%"
     }
 }

@@ -160,6 +160,9 @@ struct WindowRow: View {
     let history: [History.Point]
     let now: Date
     let absoluteResets: Bool
+    @AppStorage(Prefs.usageDisplayKey) private var usageDisplay = UsageDisplay.used.rawValue
+
+    private var display: UsageDisplay { UsageDisplay(rawValue: usageDisplay) ?? .used }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -171,13 +174,13 @@ struct WindowRow: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                Text("\(Int((window.used * 100).rounded()))%")
+                Text(display == .used ? display.text(window.used) : "\(display.text(window.used)) left")
                     .font(.callout.weight(.semibold))
                     .monospacedDigit()
-                    .contentTransition(.numericText(value: window.used))
+                    .contentTransition(.numericText(value: display.value(window.used)))
                     .frame(minWidth: 40, alignment: .trailing)
             }
-            UsageBar(used: window.used)
+            UsageBar(used: window.used, display: display)
             if history.count > 1 {
                 Sparkline(points: history).frame(height: 24)
             }
@@ -188,6 +191,7 @@ struct WindowRow: View {
 
 struct UsageBar: View {
     let used: Double
+    var display: UsageDisplay = .used
 
     var body: some View {
         GeometryReader { proxy in
@@ -195,7 +199,8 @@ struct UsageBar: View {
                 Capsule().fill(.fill.tertiary)
                 Capsule()
                     .fill(Design.color(for: used))
-                    .frame(width: proxy.size.width * min(max(used, 0), 1))
+                    // Color stays keyed to usage: red means nearly out in either mode.
+                    .frame(width: proxy.size.width * min(max(display.value(used), 0), 1))
             }
         }
         .frame(height: 6)

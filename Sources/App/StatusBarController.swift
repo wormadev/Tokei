@@ -8,7 +8,7 @@ final class StatusBarController: NSObject {
     private let connector: Connector
     private let openSettings: () -> Void
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-    private var shownRings: Rings?
+    private var shown: Shown?
     private lazy var panel: Panel = {
         let panel = Panel(rootView: PanelView(
             refresher: refresher,
@@ -81,20 +81,33 @@ final class StatusBarController: NSObject {
     }
 
     private func update() {
+        let display = UsageDisplay.current
         let rings = Self.ringValues(refresher.states, enabled: refresher.enabled)
-        if rings != shownRings || item.button?.image == nil {
-            shownRings = rings
-            item.button?.image = Self.ringsImage(rings)
-        }
-        let style = MenuBarStyle(rawValue: UserDefaults.standard.string(forKey: Prefs.menuBarStyleKey))
-        let usage = style.sources(enabled: refresher.enabled).flatMap { Self.highestUsage(refresher.states, enabled: $0) }
-        let title = usage.map { " \(Int(($0 * 100).rounded()))%" } ?? ""
-        if item.button?.title != title {
-            item.button?.attributedTitle = NSAttributedString(
-                string: title,
-                attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .medium)]
-            )
-        }
+        let lines = Self.menuLines(
+            rings,
+            weekly: UserDefaults.standard.bool(forKey: Prefs.menuBarWeeklyKey),
+            session: UserDefaults.standard.bool(forKey: Prefs.menuBarSessionKey),
+            display: display
+        )
+        let shown = Shown(rings: rings, lines: lines, display: display)
+        guard shown != self.shown || item.button?.image == nil else { return }
+        self.shown = shown
+        item.button?.image = Self.statusImage(rings, lines: lines, display: display)
+    }
+
+    private struct Shown: Equatable {
+        var rings: Rings
+        var lines: [String]
+        var display: UsageDisplay
+    }
+
+    /// Weekly above session, matching outer/inner ring. Unknown values are left out.
+    nonisolated static func menuLines(_ rings: Rings, weekly: Bool, session: Bool, display: UsageDisplay) -> [String] {
+        let both = weekly && session
+        return [
+            weekly ? rings.weekly.map { (both ? "W " : "") + display.text($0) } : nil,
+            session ? rings.session.map { (both ? "5h " : "") + display.text($0) } : nil,
+        ].compactMap(\.self)
     }
 
     struct Rings: Equatable {
@@ -112,18 +125,25 @@ final class StatusBarController: NSObject {
         return Rings(session: session?.used, weekly: weekly?.used)
     }
 
-    /// The app icon's two rings as a template image: outer = weekly, inner = 5h session.
-    /// A faint full track keeps the mark recognizable at 0%.
-    static func ringsImage(_ rings: Rings) -> NSImage {
-        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
+    /// Rings plus an optional number column, drawn as one template image so it follows the
+    /// menu bar's appearance. Outer ring = weekly, inner = 5h session; faint tracks keep the
+    /// mark recognizable at 0%.
+    static func statusImage(_ rings: Rings, lines: [String], display: UsageDisplay) -> NSImage {
+        let font = NSFont.monospacedDigitSystemFont(ofSize: lines.count > 1 ? 9 : 12, weight: .semibold)
+        let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.black]
+        let textWidth = lines.map { ($0 as NSString).size(withAttributes: attributes).width }.max() ?? 0
+        let width = 18 + (lines.isEmpty ? 0 : 4 + ceil(textWidth))
+        let image = NSImage(size: NSSize(width: width, height: 18), flipped: false) { _ in
             let center = NSPoint(x: 9, y: 9)
-            for (radius, value) in [(7.0, rings.weekly), (3.6, rings.session)] {
+            for (radius, used) in [(7.0, rings.weekly), (3.6, rings.session)] {
                 let track = NSBezierPath()
                 track.appendArc(withCenter: center, radius: radius, startAngle: 0, endAngle: 360)
                 track.lineWidth = 2.2
                 NSColor.black.withAlphaComponent(0.3).setStroke()
                 track.stroke()
-                guard let value, value > 0 else { continue }
+                guard let used else { continue }
+                let value = display.value(used)
+                guard value > 0 else { continue }
                 let sweep = min(value, 1) * 360
                 let arc = NSBezierPath()
                 arc.appendArc(withCenter: center, radius: radius, startAngle: 90, endAngle: 90 - sweep, clockwise: true)
@@ -132,21 +152,19 @@ final class StatusBarController: NSObject {
                 NSColor.black.setStroke()
                 arc.stroke()
             }
+            let lineHeight = font.ascender - font.descender
+            let top = 9 + lineHeight * CGFloat(lines.count) / 2
+            for (index, line) in lines.enumerated() {
+                let y = top - lineHeight * CGFloat(index + 1) - font.descender
+                (line as NSString).draw(at: NSPoint(x: 22, y: y), withAttributes: attributes)
+            }
             return true
         }
         image.isTemplate = true
-        let percent = { (value: Double?) in value.map { "\(Int(($0 * 100).rounded()))%" } ?? "unknown" }
-        image.accessibilityDescription = "Tokei: session \(percent(rings.session)), weekly \(percent(rings.weekly))"
+        let describe = { (used: Double?) in used.map(display.text) ?? "unknown" }
+        let mode = display == .used ? "used" : "left"
+        image.accessibilityDescription = "Tokei: session \(describe(rings.session)) \(mode), weekly \(describe(rings.weekly)) \(mode)"
         return image
-    }
-
-    /// The most constrained primary window across the given providers: what limits you first.
-    nonisolated static func highestUsage(_ states: [ProviderID: ProviderState], enabled: [ProviderID]) -> Double? {
-        enabled.compactMap { states[$0]?.snapshot }
-            .flatMap(\.windows)
-            .filter { $0.kind == .primary }
-            .map(\.used)
-            .max()
     }
 }
 
