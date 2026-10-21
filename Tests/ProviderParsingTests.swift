@@ -49,6 +49,12 @@ struct ClaudeParsingTests {
         #expect(snapshot.details == [Detail(label: "Claude Code this week", value: "100%")])
     }
 
+    @Test func `version folder names are recognized`() {
+        #expect(ClaudeProvider.isVersion("2.1.306"))
+        #expect(!ClaudeProvider.isVersion("claude"))
+        #expect(!ClaudeProvider.isVersion("cli.js"))
+    }
+
     @Test func `plan name without multiplier`() {
         #expect(ClaudeProvider.plan(subscription: "pro", tier: "default_claude_pro") == "Pro")
         #expect(ClaudeProvider.plan(subscription: nil, tier: nil) == nil)

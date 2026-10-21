@@ -85,14 +85,15 @@ struct ClaudeProvider: UsageProvider {
             "Authorization": "Bearer \(oauth.accessToken)",
             "anthropic-beta": "oauth-2025-04-20",
             "Accept": "application/json",
-            "User-Agent": "claude-code/2.1.0",
+            // Banked resets ("cedar_ember") are only reported to a current Claude Code CLI.
+            "User-Agent": "claude-cli/\(Self.cliVersion) (external, cli)",
         ]
         let hint = "Claude rejected the sign-in. Run `claude` and sign in again."
         let usage: Usage
         do {
             // cedar_ember=1 adds banked reset grants. Fall back to plain usage if it's refused.
             usage = try await HTTP.json(
-                Usage.self, URLRequest("https://api.anthropic.com/api/oauth/usage?cedar_ember=1", headers: headers), unauthorizedHint: hint
+                Usage.self, URLRequest("https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1", headers: headers), unauthorizedHint: hint
             )
         } catch ProviderError.http(400), ProviderError.unauthorized {
             usage = try await HTTP.json(
@@ -206,6 +207,30 @@ struct ClaudeProvider: UsageProvider {
             banked: banked(usage.cedar_ember, now: now),
             fetchedAt: now
         )
+    }
+
+    /// Installed Claude Code version, without running it: the native installer links `claude`
+    /// to `versions/<version>`; npm installs keep it in package.json.
+    static var cliVersion: String {
+        let fallback = "2.1.306"
+        guard let binary = Executable.path("claude")?.resolvingSymlinksInPath() else { return fallback }
+        if isVersion(binary.lastPathComponent) { return binary.lastPathComponent }
+        var folder = binary.deletingLastPathComponent()
+        for _ in 0 ..< 4 {
+            if let data = try? Data(contentsOf: folder.appending(path: "package.json")),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               json["name"] as? String == "@anthropic-ai/claude-code",
+               let version = json["version"] as? String
+            {
+                return version
+            }
+            folder.deleteLastPathComponent()
+        }
+        return fallback
+    }
+
+    static func isVersion(_ text: String) -> Bool {
+        text.wholeMatch(of: /\d+\.\d+\.\d+/) != nil
     }
 
     static let sessionLength: TimeInterval = 5 * 3600
