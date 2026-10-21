@@ -128,3 +128,42 @@ struct PaceTests {
         #expect(pace.summary == "1% in deficit")
     }
 }
+
+struct BankedResetTests {
+    private let now = ISODate.parse("2026-10-21T12:00:00Z")!
+
+    @Test func `claude counts live grants only and finds the soonest expiry`() throws {
+        let cedar = try decode(ClaudeProvider.CedarEmber.self, """
+        {"eligible":true,"next_grant_id":"g1","grants":[
+          {"id":"g1","resets_left":2,"resets_total":3,"starts_at":"2026-10-01T00:00:00Z","ends_at":"2026-11-03T00:00:00Z","paused":false,"usable_now":true},
+          {"id":"g2","resets_left":1,"starts_at":null,"ends_at":null,"paused":false},
+          {"id":"g3","resets_left":5,"ends_at":"2026-10-01T00:00:00Z","paused":false},
+          {"id":"g4","resets_left":5,"paused":true},
+          {"id":"g5","resets_left":0}]}
+        """)
+        let banked = try #require(ClaudeProvider.banked(cedar, now: now))
+        #expect(banked.count == 3)
+        #expect(banked.nextExpiry == ISODate.parse("2026-11-03T00:00:00Z"))
+        #expect(ClaudeProvider.banked(try decode(ClaudeProvider.CedarEmber.self, #"{"eligible":false,"grants":[{"resets_left":1}]}"#), now: now) == nil)
+        #expect(ClaudeProvider.banked(nil, now: now) == nil)
+    }
+
+    @Test func `codex counts available unexpired credits`() throws {
+        let credits = try decode(CodexProvider.ResetCredits.self, """
+        {"credits":[{"id":"a","status":"available","expires_at":"2026-11-05T00:00:00Z"},
+                    {"id":"b","status":"available","expires_at":null},
+                    {"id":"c","status":"redeemed"},
+                    {"id":"d","status":"available","expires_at":"2026-10-01T00:00:00Z"}],"available_count":3}
+        """)
+        let banked = try #require(CodexProvider.banked(credits, now: now))
+        #expect(banked.count == 2)
+        #expect(banked.nextExpiry == ISODate.parse("2026-11-05T00:00:00Z"))
+    }
+
+    @Test func `banked text names the next expiry`() {
+        let expiry = ISODate.parse("2026-11-03T00:00:00Z")!
+        let one = BankedResets(count: 1, nextExpiry: expiry).text(now: now)
+        #expect(one.hasPrefix("1 banked reset · expires "))
+        #expect(BankedResets(count: 2, nextExpiry: nil).text(now: now) == "2 banked resets")
+    }
+}

@@ -39,12 +39,18 @@ struct CodexProvider: UsageProvider {
             "User-Agent": "Tokei",
         ]
         if let account = tokens.account_id { headers["ChatGPT-Account-Id"] = account }
-        let usage = try await HTTP.json(
-            Usage.self,
-            URLRequest("https://chatgpt.com/backend-api/wham/usage", headers: headers),
-            unauthorizedHint: "Codex rejected the sign-in. Run `codex login`."
+        let hint = "Codex rejected the sign-in. Run `codex login`."
+        let usage = try await HTTP.json(Usage.self, URLRequest("https://chatgpt.com/backend-api/wham/usage", headers: headers), unauthorizedHint: hint)
+        // Banked resets live on their own endpoint; usage still shows if it fails.
+        var creditHeaders = headers
+        creditHeaders["OpenAI-Beta"] = "codex-1"
+        creditHeaders["originator"] = "Codex Desktop"
+        let credits = try? await HTTP.json(
+            ResetCredits.self, URLRequest("https://chatgpt.com/backend-api/wham/rate-limit-reset-credits", headers: creditHeaders), unauthorizedHint: hint
         )
-        return Self.snapshot(usage: usage, idToken: tokens.id_token)
+        var snapshot = Self.snapshot(usage: usage, idToken: tokens.id_token)
+        snapshot.banked = Self.banked(credits)
+        return snapshot
     }
 
     // MARK: - Parsing
@@ -70,6 +76,24 @@ struct CodexProvider: UsageProvider {
         var plan_type: String?
         var rate_limit: RateLimit?
         var credits: Credits?
+    }
+
+    struct ResetCredits: Decodable {
+        struct Credit: Decodable {
+            var status: String?
+            var expires_at: String?
+        }
+
+        var credits: [Credit]?
+    }
+
+    static func banked(_ credits: ResetCredits?, now: Date = .now) -> BankedResets? {
+        let available = (credits?.credits ?? []).filter { credit in
+            guard credit.status == "available" else { return false }
+            return ISODate.parse(credit.expires_at).map { $0 > now } ?? true
+        }
+        guard !available.isEmpty else { return nil }
+        return BankedResets(count: available.count, nextExpiry: available.compactMap { ISODate.parse($0.expires_at) }.min())
     }
 
     static func snapshot(usage: Usage, idToken: String?, now: Date = .now) -> Snapshot {

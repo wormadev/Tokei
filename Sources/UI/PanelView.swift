@@ -101,6 +101,11 @@ struct ProviderCard: View {
                         absoluteResets: absoluteResets
                     )
                 }
+                // Always shown: a banked reset is the one number you can act on.
+                if let banked = snapshot.banked {
+                    Label(banked.text(now: now), systemImage: "arrow.counterclockwise.circle")
+                        .font(.callout)
+                }
                 if snapshot.windows.isEmpty {
                     Text("No limits reported").font(.caption).foregroundStyle(.secondary)
                 }

@@ -84,9 +84,17 @@ struct ClaudeProvider: UsageProvider {
             "User-Agent": "claude-code/2.1.0",
         ]
         let hint = "Claude rejected the sign-in. Run `claude` and sign in again."
-        let usage = try await HTTP.json(
-            Usage.self, URLRequest("https://api.anthropic.com/api/oauth/usage", headers: headers), unauthorizedHint: hint
-        )
+        let usage: Usage
+        do {
+            // cedar_ember=1 adds banked reset grants. Fall back to plain usage if it's refused.
+            usage = try await HTTP.json(
+                Usage.self, URLRequest("https://api.anthropic.com/api/oauth/usage?cedar_ember=1", headers: headers), unauthorizedHint: hint
+            )
+        } catch ProviderError.http(400), ProviderError.unauthorized {
+            usage = try await HTTP.json(
+                Usage.self, URLRequest("https://api.anthropic.com/api/oauth/usage", headers: headers), unauthorizedHint: hint
+            )
+        }
         let profile = try? await HTTP.json(
             Profile.self, URLRequest("https://api.anthropic.com/api/oauth/profile", headers: headers), unauthorizedHint: hint
         )
@@ -136,6 +144,33 @@ struct ClaudeProvider: UsageProvider {
         var extra_usage: Extra?
         var limits: [Limit]?
         var seven_day_breakdown: Breakdown?
+        var cedar_ember: CedarEmber?
+    }
+
+    struct CedarEmber: Decodable {
+        struct Grant: Decodable {
+            var resets_left: Int?
+            var starts_at: String?
+            var ends_at: String?
+            var paused: Bool?
+        }
+
+        var eligible: Bool?
+        var grants: [Grant]?
+    }
+
+    /// Counts resets in grants that are live now: not paused, started, not expired.
+    static func banked(_ cedar: CedarEmber?, now: Date = .now) -> BankedResets? {
+        guard let cedar, cedar.eligible != false else { return nil }
+        let live = (cedar.grants ?? []).filter { grant in
+            guard grant.paused != true, (grant.resets_left ?? 0) > 0 else { return false }
+            if let start = ISODate.parse(grant.starts_at), start > now { return false }
+            if let end = ISODate.parse(grant.ends_at), end <= now { return false }
+            return true
+        }
+        let count = live.reduce(0) { $0 + ($1.resets_left ?? 0) }
+        guard count > 0 else { return nil }
+        return BankedResets(count: count, nextExpiry: live.compactMap { ISODate.parse($0.ends_at) }.min())
     }
 
     struct Profile: Decodable {
@@ -164,6 +199,7 @@ struct ClaudeProvider: UsageProvider {
             windows: windows,
             account: Account(user: user, plan: plan(subscription: oauth.subscriptionType, tier: oauth.rateLimitTier)),
             details: details,
+            banked: banked(usage.cedar_ember, now: now),
             fetchedAt: now
         )
     }

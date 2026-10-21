@@ -49,7 +49,24 @@ struct Snapshot: Codable, Equatable, Sendable {
     var windows: [UsageWindow]
     var account: Account
     var details: [Detail] = []
+    /// Optional so older saved state still decodes.
+    var banked: BankedResets?
     var fetchedAt: Date
+}
+
+/// Free limit resets the plan has banked (Claude "cedar_ember" grants, Codex reset credits).
+struct BankedResets: Codable, Equatable, Sendable {
+    var count: Int
+    var nextExpiry: Date?
+
+    func text(now: Date) -> String {
+        let noun = count == 1 ? "1 banked reset" : "\(count) banked resets"
+        guard let nextExpiry else { return noun }
+        let when = Calendar.current.isDate(nextExpiry, inSameDayAs: now)
+            ? nextExpiry.formatted(date: .omitted, time: .shortened)
+            : nextExpiry.formatted(.dateTime.month(.abbreviated).day())
+        return "\(noun) · \(count == 1 ? "expires" : "next expires") \(when)"
+    }
 }
 
 enum ProviderError: Error, Equatable, LocalizedError {
