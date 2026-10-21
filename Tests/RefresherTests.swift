@@ -117,6 +117,34 @@ struct FormattingTests {
     }
 }
 
+struct MenuRingsTests {
+    private func state(_ windows: [UsageWindow]) -> ProviderState {
+        ProviderState(snapshot: Snapshot(windows: windows, account: Account(), fetchedAt: .now))
+    }
+
+    @Test func `rings follow the first provider in order`() {
+        let states: [ProviderID: ProviderState] = [
+            .claude: state([
+                UsageWindow(id: "session", label: "", kind: .primary, used: 0.13),
+                UsageWindow(id: "weekly", label: "", kind: .primary, used: 0.43),
+                UsageWindow(id: "weekly-example", label: "", kind: .secondary, used: 0.9),
+            ]),
+            .codex: state([UsageWindow(id: "weekly", label: "", kind: .primary, used: 0.7)]),
+        ]
+        #expect(StatusBarController.ringValues(states, enabled: [.claude, .codex]) == .init(session: 0.13, weekly: 0.43))
+        #expect(StatusBarController.ringValues(states, enabled: [.codex, .claude]) == .init(session: nil, weekly: 0.7))
+        #expect(StatusBarController.ringValues(states, enabled: []) == .init(session: nil, weekly: nil))
+    }
+
+    @Test func `codex windows without lengths fall back to slot order`() {
+        let states: [ProviderID: ProviderState] = [.codex: state([
+            UsageWindow(id: "primary", label: "", kind: .primary, used: 0.2),
+            UsageWindow(id: "secondary", label: "", kind: .primary, used: 0.5),
+        ])]
+        #expect(StatusBarController.ringValues(states, enabled: [.codex]) == .init(session: 0.2, weekly: 0.5))
+    }
+}
+
 struct PrefsTests {
     @Test func `menu bar style round trips and picks its sources`() {
         #expect(MenuBarStyle(rawValue: "icon") == .icon)
