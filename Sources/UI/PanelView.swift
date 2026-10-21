@@ -123,7 +123,13 @@ struct ProviderCard: View {
                     }
                 }
             }
-            if let error = connector.errors[id] ?? state.error {
+            if state.transient == true, state.snapshot != nil, let error = state.error {
+                // Nothing to fix: say it calmly and keep the last numbers.
+                Text("Couldn't update\(state.retryAt.map { " · retrying \(TimeText.reset($0, now: now, absolute: false))" } ?? "")")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .help(error)
+            } else if let error = connector.errors[id] ?? state.error {
                 // Markdown so `claude` renders as code.
                 Label(LocalizedStringKey(error), systemImage: state.snapshot == nil ? "info.circle" : "exclamationmark.triangle")
                     .font(.caption)
@@ -163,6 +169,8 @@ struct ProviderCard: View {
 }
 
 /// Banked resets, with a Reset button that needs a second click: spending one can't be undone.
+/// Banked resets, with a Reset that needs a second click: spending one can't be undone.
+/// Text-style buttons and a single line, so the row doesn't reflow when confirming.
 struct BankedRow: View {
     let id: ProviderID
     let banked: BankedResets
@@ -171,28 +179,33 @@ struct BankedRow: View {
     @State private var confirming = false
 
     var body: some View {
-        HStack(spacing: 8) {
-            Label(banked.text(now: now), systemImage: "arrow.counterclockwise.circle")
-                .font(.callout)
-            Spacer()
+        HStack(spacing: 12) {
+            Image(systemName: "arrow.counterclockwise.circle")
+            Text(confirming ? "Reset limits now?" : banked.text(now: now))
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 0)
             if let grantID = banked.grantID {
                 if connector.redeeming.contains(id) {
-                    ProgressView().controlSize(.small)
+                    ProgressView().controlSize(.mini)
                 } else if confirming {
                     Button("Cancel") { confirming = false }
-                    Button("Use reset") {
+                        .foregroundStyle(.secondary)
+                    Button("Reset") {
                         confirming = false
                         connector.redeem(id, grantID: grantID)
                     }
-                    .tint(.orange)
+                    .foregroundStyle(.orange)
+                    .fontWeight(.semibold)
                 } else {
                     Button("Reset") { confirming = true }
+                        .foregroundStyle(.tint)
                         .help("Resets your session and weekly limits now")
                 }
             }
         }
-        .controlSize(.small)
-        .buttonStyle(.bordered)
+        .font(.callout)
+        .buttonStyle(.borderless)
         .task(id: confirming) {
             // Back out of the confirm state on its own if left alone.
             guard confirming else { return }

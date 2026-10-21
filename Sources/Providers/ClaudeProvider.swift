@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 struct ClaudeProvider: UsageProvider {
     let id = ProviderID.claude
@@ -94,9 +95,14 @@ struct ClaudeProvider: UsageProvider {
                 Usage.self, URLRequest("https://api.anthropic.com/api/oauth/usage", headers: headers), unauthorizedHint: hint
             )
         }
-        let profile = try? await HTTP.json(
-            Profile.self, URLRequest("https://api.anthropic.com/api/oauth/profile", headers: headers), unauthorizedHint: hint
-        )
+        // The profile (email) only changes with the sign-in; one request per token, not per refresh.
+        var profile = Self.profiles.withLock { $0[oauth.accessToken] }
+        if profile == nil {
+            profile = try? await HTTP.json(
+                Profile.self, URLRequest("https://api.anthropic.com/api/oauth/profile", headers: headers), unauthorizedHint: hint
+            )
+            if let profile { Self.profiles.withLock { $0 = [oauth.accessToken: profile] } }
+        }
         return Self.snapshot(usage: usage, profile: profile, oauth: oauth)
     }
 
@@ -207,6 +213,8 @@ struct ClaudeProvider: UsageProvider {
         }
     }
 
+    private static let profiles = Mutex<[String: Profile]>([:])
+
     static func requestHeaders(token: String) -> [String: String] {
         [
             "Authorization": "Bearer \(token)",
@@ -217,13 +225,13 @@ struct ClaudeProvider: UsageProvider {
         ]
     }
 
-    struct Profile: Decodable {
-        struct Account: Decodable {
+    struct Profile: Decodable, Sendable {
+        struct Account: Decodable, Sendable {
             var email_address: String?
             var email: String?
         }
 
-        struct Organization: Decodable {
+        struct Organization: Decodable, Sendable {
             var uuid: String?
         }
 

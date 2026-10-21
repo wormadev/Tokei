@@ -124,9 +124,9 @@ private struct GeneralSettings: View {
 
     private var refreshFooter: String {
         let background = switch interval {
-        case Prefs.agentAwareInterval: "Every 2 minutes while Claude Code or Codex is working, every 15 minutes when idle."
-        case Prefs.neverInterval: refreshOnOpen ? "Usage updates only when you open the panel (if older than a minute)." : "Usage updates only when you press Refresh (⌘R)."
-        default: refreshOnOpen ? "Opening the panel also refreshes anything older than a minute." : ""
+        case Prefs.agentAwareInterval: "Every 5 minutes while Claude Code or Codex is working, every 15 minutes when idle."
+        case Prefs.neverInterval: refreshOnOpen ? "Usage updates only when you open the panel (if older than 2 minutes)." : "Usage updates only when you press Refresh (⌘R)."
+        default: refreshOnOpen ? "Opening the panel also refreshes anything older than 2 minutes." : ""
         }
         return [background, interval == Prefs.neverInterval ? "" : "Pauses while the Mac sleeps or is locked."]
             .filter { !$0.isEmpty }.joined(separator: " ")
