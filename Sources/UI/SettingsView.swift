@@ -16,7 +16,11 @@ final class SettingsWindowController {
         if window == nil {
             let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView(refresher: refresher, connector: connector)))
             window.title = "Quota Settings"
-            window.styleMask = [.titled, .closable]
+            // Full-size content lets the glass sidebar run under the titlebar, like System Settings.
+            window.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
+            window.titlebarAppearsTransparent = true
+            window.titleVisibility = .hidden
+            window.toolbarStyle = .unified
             window.isReleasedWhenClosed = false
             window.center()
             self.window = window
@@ -31,15 +35,78 @@ final class SettingsWindowController {
 struct SettingsView: View {
     let refresher: Refresher
     let connector: Connector
-    @AppStorage("settingsTab") private var tab = "general"
+    /// "general", "display" or a provider's raw value.
+    @AppStorage("settingsTab") private var page = "general"
+    @State private var order = Prefs.providerOrder
 
     var body: some View {
-        TabView(selection: $tab) {
-            Tab("General", systemImage: "gearshape", value: "general") { GeneralSettings() }
-            Tab("Providers", systemImage: "square.stack.3d.up", value: "providers") { ProviderSettings(refresher: refresher, connector: connector) }
-            Tab("Display", systemImage: "eye", value: "display") { DisplaySettings(refresher: refresher) }
+        NavigationSplitView {
+            List(selection: Binding(get: { page }, set: { page = $0 ?? "general" })) {
+                Label("General", systemImage: "gearshape").tag("general")
+                Label("Display", systemImage: "eye").tag("display")
+                Section("Providers") {
+                    ForEach(order) { id in
+                        ProviderSidebarRow(id: id, state: refresher.states[id]).tag(id.rawValue)
+                    }
+                    .onMove { from, to in
+                        order.move(fromOffsets: from, toOffset: to)
+                        Prefs.providerOrder = order
+                    }
+                }
+            }
+            .navigationSplitViewColumnWidth(180)
+            .toolbar(removing: .sidebarToggle)
+        } detail: {
+            detail
+                .navigationTitle(title)
         }
-        .frame(width: 480, height: 460)
+        .frame(width: 640, height: 420)
+    }
+
+    private var title: String {
+        switch page {
+        case "general": "General"
+        case "display": "Display"
+        default: ProviderID(rawValue: page)?.name ?? "General"
+        }
+    }
+
+    @ViewBuilder
+    private var detail: some View {
+        switch page {
+        case "display": DisplaySettings(refresher: refresher)
+        default:
+            if let id = ProviderID(rawValue: page) {
+                ProviderPage(id: id, refresher: refresher, connector: connector).id(id)
+            } else {
+                GeneralSettings()
+            }
+        }
+    }
+}
+
+/// Name plus a status dot: green working, orange needs attention, none when off.
+private struct ProviderSidebarRow: View {
+    let id: ProviderID
+    let state: ProviderState?
+    @AppStorage private var enabled: Bool
+
+    init(id: ProviderID, state: ProviderState?) {
+        self.id = id
+        self.state = state
+        _enabled = AppStorage(wrappedValue: true, Prefs.enabledKey(id))
+    }
+
+    var body: some View {
+        HStack {
+            Text(id.name).foregroundStyle(enabled ? .primary : .secondary)
+            Spacer()
+            if enabled {
+                Circle()
+                    .fill(state?.error == nil && state?.snapshot != nil ? Color.green : Color.orange)
+                    .frame(width: 6, height: 6)
+            }
+        }
     }
 }
 
@@ -146,45 +213,7 @@ private struct DisplaySettings: View {
     }
 }
 
-private struct ProviderSettings: View {
-    let refresher: Refresher
-    let connector: Connector
-    @State private var order = Prefs.providerOrder
-
-    var body: some View {
-        Form {
-            Section {
-                ForEach(order) { id in
-                    Label(id.name, systemImage: "line.3.horizontal")
-                        .contextMenu {
-                            Button("Move Up") { move(id, by: -1) }.disabled(order.first == id)
-                            Button("Move Down") { move(id, by: 1) }.disabled(order.last == id)
-                        }
-                }
-                .onMove { from, to in
-                    order.move(fromOffsets: from, toOffset: to)
-                    Prefs.providerOrder = order
-                }
-            } header: {
-                Text("Panel order")
-            } footer: {
-                Text("Drag to reorder, or right-click a provider.")
-            }
-            ForEach(order) { id in
-                ProviderRow(id: id, refresher: refresher, connector: connector)
-            }
-        }
-        .formStyle(.grouped)
-    }
-
-    private func move(_ id: ProviderID, by offset: Int) {
-        guard let index = order.firstIndex(of: id), order.indices.contains(index + offset) else { return }
-        order.swapAt(index, index + offset)
-        Prefs.providerOrder = order
-    }
-}
-
-private struct ProviderRow: View {
+private struct ProviderPage: View {
     let id: ProviderID
     let refresher: Refresher
     let connector: Connector
@@ -198,28 +227,39 @@ private struct ProviderRow: View {
     }
 
     var body: some View {
-        Section {
-            Toggle(id.name, isOn: $enabled)
-                .font(.headline)
-                .onChange(of: enabled) { _, on in
-                    if on { Task { await refresher.refresh(id) } }
-                }
+        Form {
+            Section {
+                Toggle("Show in panel", isOn: $enabled)
+                    .onChange(of: enabled) { _, on in
+                        if on { Task { await refresher.refresh(id) } }
+                    }
+            } footer: {
+                Text("Drag providers in the sidebar to change their order in the panel.")
+            }
             if enabled {
-                status
-                source
+                Section("Status") {
+                    status
+                    if let plan = refresher.states[id]?.snapshot?.account.plan {
+                        LabeledContent("Plan", value: plan)
+                    }
+                }
+                Section("Source") { source }
             }
         }
+        .formStyle(.grouped)
     }
 
     @ViewBuilder
     private var status: some View {
         let state = refresher.states[id]
         if let error = connector.errors[id] ?? state?.error {
-            Label(LocalizedStringKey(error), systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)
+            Label(LocalizedStringKey(error), systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
         } else if let user = state?.snapshot?.account.user {
-            Label("Connected as \(user)", systemImage: "checkmark.circle").font(.caption).foregroundStyle(.secondary)
+            Label("Connected as \(user)", systemImage: "checkmark.circle")
         } else if state?.snapshot != nil {
-            Label("Connected", systemImage: "checkmark.circle").font(.caption).foregroundStyle(.secondary)
+            Label("Connected", systemImage: "checkmark.circle")
+        } else {
+            Label("Not checked yet", systemImage: "clock").foregroundStyle(.secondary)
         }
     }
 
