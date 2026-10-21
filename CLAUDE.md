@@ -7,6 +7,7 @@ Menu bar AI plan usage (Claude, Codex) for macOS 26+, Liquid Glass UI. See SPEC.
 - `xcodegen generate` after adding/removing files (project.yml is the source of truth; .xcodeproj is generated)
 - `xcodebuild -project Tokei.xcodeproj -scheme Tokei -configuration Debug -derivedDataPath build build`
 - Tests: `xcodebuild -project Tokei.xcodeproj -scheme Tokei -derivedDataPath build test`
+- DMG: `scripts/dmg.sh` → `build/dmg/Tokei-<version>.dmg`. Apple Development signed only (no Developer ID on this Mac yet), so it is not notarized and other Macs need right-click > Open
 
 ## Design system
 
