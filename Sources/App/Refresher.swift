@@ -39,7 +39,7 @@ final class Refresher {
     }
 
     var enabled: [ProviderID] {
-        ProviderID.allCases.filter { Prefs.isEnabled($0) && providers[$0] != nil }
+        Prefs.providerOrder.filter { Prefs.isEnabled($0) && providers[$0] != nil }
     }
 
     func start() {

@@ -10,6 +10,7 @@ enum Prefs {
     static let showHistoryKey = "show.history"
     static let absoluteResetsKey = "show.absoluteResets"
     static let didDetectKey = "didDetectProviders"
+    static let providerOrderKey = "providerOrder"
 
     static func enabledKey(_ id: ProviderID) -> String { "enabled.\(id.rawValue)" }
 
@@ -29,6 +30,16 @@ enum Prefs {
 
     static var refreshInterval: TimeInterval {
         TimeInterval(max(60, UserDefaults.standard.integer(forKey: refreshIntervalKey)))
+    }
+
+    /// Panel order. Stored as "claude,codex,…"; providers missing from it are appended.
+    static var providerOrder: [ProviderID] {
+        get {
+            let saved = (UserDefaults.standard.string(forKey: providerOrderKey) ?? "")
+                .split(separator: ",").compactMap { ProviderID(rawValue: String($0)) }
+            return saved + ProviderID.allCases.filter { !saved.contains($0) }
+        }
+        set { UserDefaults.standard.set(newValue.map(\.rawValue).joined(separator: ","), forKey: providerOrderKey) }
     }
 
     static func isEnabled(_ id: ProviderID) -> Bool {
@@ -53,14 +64,44 @@ enum Prefs {
     }
 }
 
-enum MenuBarStyle: String, CaseIterable, Identifiable {
-    case icon, highest
+/// Stored as "icon", "highest" or a provider's raw value.
+enum MenuBarStyle: Hashable, Identifiable {
+    case icon, highest, provider(ProviderID)
+
+    static var all: [MenuBarStyle] { [.icon, .highest] + ProviderID.allCases.map { .provider($0) } }
+
+    init(rawValue: String?) {
+        switch rawValue {
+        case "icon": self = .icon
+        case let raw?: self = ProviderID(rawValue: raw).map { .provider($0) } ?? .highest
+        case nil: self = .highest
+        }
+    }
+
+    var rawValue: String {
+        switch self {
+        case .icon: "icon"
+        case .highest: "highest"
+        case let .provider(id): id.rawValue
+        }
+    }
+
     var id: String { rawValue }
 
     var label: String {
         switch self {
         case .icon: "Icon only"
-        case .highest: "Icon and highest usage"
+        case .highest: "Highest usage"
+        case let .provider(id): "\(id.name) usage"
+        }
+    }
+
+    /// Providers whose usage feeds the menu bar number; nil means no number.
+    func sources(enabled: [ProviderID]) -> [ProviderID]? {
+        switch self {
+        case .icon: nil
+        case .highest: enabled
+        case let .provider(id): [id]
         }
     }
 }

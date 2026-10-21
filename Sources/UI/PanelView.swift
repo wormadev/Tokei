@@ -1,10 +1,14 @@
+import Combine
 import SwiftUI
 
 struct PanelView: View {
     let refresher: Refresher
     let openSettings: () -> Void
+    /// `refresher.enabled` reads UserDefaults, which SwiftUI doesn't observe; bump on any change.
+    @State private var defaultsChanges = 0
 
     var body: some View {
+        let _ = defaultsChanges
         VStack(alignment: .leading, spacing: 8) {
             header
             if refresher.enabled.isEmpty {
@@ -28,6 +32,9 @@ struct PanelView: View {
         }
         .padding(12)
         .frame(width: Design.panelWidth)
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification).receive(on: RunLoop.main)) { _ in
+            defaultsChanges += 1
+        }
     }
 
     private var header: some View {

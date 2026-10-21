@@ -110,3 +110,26 @@ struct FormattingTests {
         #expect(StatusBarController.highestUsage(states, enabled: [.claude]) == 0.4)
     }
 }
+
+struct PrefsTests {
+    @Test func `menu bar style round trips and picks its sources`() {
+        #expect(MenuBarStyle(rawValue: "icon") == .icon)
+        #expect(MenuBarStyle(rawValue: "codex") == .provider(.codex))
+        #expect(MenuBarStyle(rawValue: nil) == .highest)
+        #expect(MenuBarStyle(rawValue: "removed-provider") == .highest)
+        #expect(MenuBarStyle.provider(.cursor).rawValue == "cursor")
+        #expect(MenuBarStyle.icon.sources(enabled: [.claude]) == nil)
+        #expect(MenuBarStyle.highest.sources(enabled: [.claude, .codex]) == [.claude, .codex])
+        #expect(MenuBarStyle.provider(.codex).sources(enabled: [.claude]) == [.codex])
+    }
+
+    @Test func `provider order keeps saved order and appends missing providers`() {
+        let defaults = UserDefaults.standard
+        let saved = defaults.string(forKey: Prefs.providerOrderKey)
+        defer { defaults.set(saved, forKey: Prefs.providerOrderKey) }
+        defaults.set("cursor,bogus,claude", forKey: Prefs.providerOrderKey)
+        #expect(Prefs.providerOrder == [.cursor, .claude, .codex, .gemini, .copilot])
+        Prefs.providerOrder = [.copilot, .claude]
+        #expect(Prefs.providerOrder.prefix(2) == [.copilot, .claude])
+    }
+}

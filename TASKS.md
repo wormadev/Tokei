@@ -12,6 +12,7 @@
 - [x] Review fixes: Claude Connect/Keychain loss, multi-display panel, sleep vs lock, sign-out clears data, Gemini write-back race, Copilot save/cancel
 
 ## Later
-- [ ] Provider order in panel (drag in Settings)
+- [x] Provider order in panel (drag or right-click in Settings)
+- [x] Menu bar: icon, highest usage, or one provider
 - [ ] Gemini: newer gemini-cli may keep creds in Keychain service "gemini" (seen on this Mac); unconfirmed
 - [ ] Codex: optional token refresh with write-back to auth.json (CodexBar avoids it; risk of stranding a running CLI)

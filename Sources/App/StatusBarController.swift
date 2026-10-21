@@ -77,12 +77,12 @@ final class StatusBarController: NSObject {
     }
 
     private func update() {
-        let highest = Self.highestUsage(refresher.states, enabled: refresher.enabled)
         let image = NSImage(systemSymbolName: "gauge.with.dots.needle.50percent", accessibilityDescription: "Quota")
         image?.isTemplate = true
         item.button?.image = image
-        let style = MenuBarStyle(rawValue: UserDefaults.standard.string(forKey: Prefs.menuBarStyleKey) ?? "") ?? .highest
-        let title = style == .highest ? highest.map { " \(Int(($0 * 100).rounded()))%" } ?? "" : ""
+        let style = MenuBarStyle(rawValue: UserDefaults.standard.string(forKey: Prefs.menuBarStyleKey))
+        let usage = style.sources(enabled: refresher.enabled).flatMap { Self.highestUsage(refresher.states, enabled: $0) }
+        let title = usage.map { " \(Int(($0 * 100).rounded()))%" } ?? ""
         if item.button?.title != title {
             item.button?.attributedTitle = NSAttributedString(
                 string: title,
@@ -91,7 +91,7 @@ final class StatusBarController: NSObject {
         }
     }
 
-    /// The most constrained primary window across enabled providers: what limits you first.
+    /// The most constrained primary window across the given providers: what limits you first.
     nonisolated static func highestUsage(_ states: [ProviderID: ProviderState], enabled: [ProviderID]) -> Double? {
         enabled.compactMap { states[$0]?.snapshot }
             .flatMap(\.windows)

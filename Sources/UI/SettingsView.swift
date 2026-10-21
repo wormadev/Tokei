@@ -56,7 +56,10 @@ private struct GeneralSettings: View {
             Text("Opening the panel also refreshes anything older than a minute. Refresh pauses while the Mac sleeps or is locked.")
                 .font(.caption).foregroundStyle(.secondary)
             Picker("Menu bar", selection: $menuBarStyle) {
-                ForEach(MenuBarStyle.allCases) { Text($0.label).tag($0.rawValue) }
+                ForEach(MenuBarStyle.all) { style in
+                    Text(style.label).tag(style.rawValue)
+                    if style == .highest { Divider() }
+                }
             }
             Toggle("Launch at login", isOn: $launchAtLogin)
                 .onChange(of: launchAtLogin) { _, on in
@@ -103,14 +106,38 @@ private struct DisplaySettings: View {
 
 private struct ProviderSettings: View {
     let refresher: Refresher
+    @State private var order = Prefs.providerOrder
 
     var body: some View {
         Form {
-            ForEach(ProviderID.allCases) { id in
+            Section {
+                ForEach(order) { id in
+                    Label(id.name, systemImage: "line.3.horizontal")
+                        .contextMenu {
+                            Button("Move Up") { move(id, by: -1) }.disabled(order.first == id)
+                            Button("Move Down") { move(id, by: 1) }.disabled(order.last == id)
+                        }
+                }
+                .onMove { from, to in
+                    order.move(fromOffsets: from, toOffset: to)
+                    Prefs.providerOrder = order
+                }
+            } header: {
+                Text("Panel order")
+            } footer: {
+                Text("Drag to reorder, or right-click a provider.")
+            }
+            ForEach(order) { id in
                 ProviderRow(id: id, refresher: refresher)
             }
         }
         .formStyle(.grouped)
+    }
+
+    private func move(_ id: ProviderID, by offset: Int) {
+        guard let index = order.firstIndex(of: id), order.indices.contains(index + offset) else { return }
+        order.swapAt(index, index + offset)
+        Prefs.providerOrder = order
     }
 }
 
