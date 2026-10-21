@@ -3,12 +3,16 @@ import Foundation
 /// UserDefaults keys. Views bind with @AppStorage(Prefs.key); non-view code reads the statics.
 enum Prefs {
     static let refreshIntervalKey = "refreshInterval"
-    static let menuBarStyleKey = "menuBarStyle"
+    static let usageDisplayKey = "usageDisplay"
+    static let menuBarWeeklyKey = "menuBar.weekly"
+    static let menuBarSessionKey = "menuBar.session"
     static let showAccountKey = "show.account"
     static let showDetailsKey = "show.details"
     static let showModelLimitsKey = "show.modelLimits"
     static let showHistoryKey = "show.history"
     static let absoluteResetsKey = "show.absoluteResets"
+    static let showPaceKey = "show.pace"
+    static let notifyResetsKey = "notify.resets"
     static let providerOrderKey = "providerOrder"
     static let refreshOnOpenKey = "refreshOnOpen"
 
@@ -16,22 +20,34 @@ enum Prefs {
 
     static func registerDefaults() {
         var defaults: [String: Any] = [
-            refreshIntervalKey: 300,
+            refreshIntervalKey: agentAwareInterval,
             refreshOnOpenKey: true,
-            menuBarStyleKey: MenuBarStyle.highest.rawValue,
+            usageDisplayKey: UsageDisplay.used.rawValue,
+            menuBarWeeklyKey: false,
+            menuBarSessionKey: true,
             showAccountKey: true,
             showDetailsKey: false,
             showModelLimitsKey: false,
             showHistoryKey: false,
             absoluteResetsKey: false,
+            showPaceKey: true,
+            notifyResetsKey: true,
         ]
         for id in ProviderID.allCases { defaults[enabledKey(id)] = true }
         UserDefaults.standard.register(defaults: defaults)
     }
 
-    /// Seconds between background refreshes; nil for "Only when opened" (stored as -1).
+    /// Stored refresh setting: seconds, `neverInterval` or `agentAwareInterval`.
+    static let neverInterval = -1
+    static let agentAwareInterval = -2
+
+    static var refreshSetting: Int {
+        UserDefaults.standard.object(forKey: refreshIntervalKey) as? Int ?? agentAwareInterval
+    }
+
+    /// Fixed seconds between background refreshes; nil for Never and Agent aware.
     static var refreshInterval: TimeInterval? {
-        let raw = UserDefaults.standard.integer(forKey: refreshIntervalKey)
+        let raw = refreshSetting
         if raw < 0 { return nil }
         return raw == 0 ? 300 : TimeInterval(max(60, raw))
     }
@@ -55,44 +71,30 @@ enum Prefs {
     }
 }
 
-/// Stored as "icon", "highest" or a provider's raw value.
-enum MenuBarStyle: Hashable, Identifiable {
-    case icon, highest, provider(ProviderID)
-
-    static var all: [MenuBarStyle] { [.icon, .highest] + ProviderID.allCases.map { .provider($0) } }
-
-    init(rawValue: String?) {
-        switch rawValue {
-        case "icon": self = .icon
-        case let raw?: self = ProviderID(rawValue: raw).map { .provider($0) } ?? .highest
-        case nil: self = .highest
-        }
-    }
-
-    var rawValue: String {
-        switch self {
-        case .icon: "icon"
-        case .highest: "highest"
-        case let .provider(id): id.rawValue
-        }
-    }
-
+/// Show usage as consumed or as what's left. Bars, rings and numbers all follow it.
+enum UsageDisplay: String, CaseIterable, Identifiable {
+    case used, remaining
     var id: String { rawValue }
+
+    static var current: UsageDisplay {
+        UsageDisplay(rawValue: UserDefaults.standard.string(forKey: Prefs.usageDisplayKey) ?? "") ?? .used
+    }
 
     var label: String {
         switch self {
-        case .icon: "Icon only"
-        case .highest: "Highest usage"
-        case let .provider(id): "\(id.name) usage"
+        case .used: "As used"
+        case .remaining: "Remaining"
         }
     }
 
-    /// Providers whose usage feeds the menu bar number; nil means no number.
-    func sources(enabled: [ProviderID]) -> [ProviderID]? {
+    func value(_ used: Double) -> Double {
         switch self {
-        case .icon: nil
-        case .highest: enabled
-        case let .provider(id): [id]
+        case .used: used
+        case .remaining: max(0, 1 - used)
         }
+    }
+
+    func text(_ used: Double) -> String {
+        "\(Int((value(used) * 100).rounded()))%"
     }
 }

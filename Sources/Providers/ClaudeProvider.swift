@@ -66,6 +66,10 @@ struct ClaudeProvider: UsageProvider {
         throw ProviderError.notConfigured("Run `claude` and sign in.")
     }
 
+    var activityFolder: URL {
+        Self.credentialsFile.deletingLastPathComponent().appending(path: "projects")
+    }
+
     func isInstalled() -> Bool {
         Executable.exists("claude") || FileManager.default.fileExists(atPath: Self.credentialsFile.path)
             || Keychain.exists(service: Self.keychainService)
@@ -77,16 +81,19 @@ struct ClaudeProvider: UsageProvider {
         if credentials.isExpired {
             throw ProviderError.unauthorized("Sign-in expired. Run `claude` once to refresh it.")
         }
-        let headers = [
-            "Authorization": "Bearer \(oauth.accessToken)",
-            "anthropic-beta": "oauth-2025-04-20",
-            "Accept": "application/json",
-            "User-Agent": "claude-code/2.1.0",
-        ]
+        let headers = Self.requestHeaders(token: oauth.accessToken)
         let hint = "Claude rejected the sign-in. Run `claude` and sign in again."
-        let usage = try await HTTP.json(
-            Usage.self, URLRequest("https://api.anthropic.com/api/oauth/usage", headers: headers), unauthorizedHint: hint
-        )
+        let usage: Usage
+        do {
+            // cedar_ember=1 adds banked reset grants. Fall back to plain usage if it's refused.
+            usage = try await HTTP.json(
+                Usage.self, URLRequest("https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1", headers: headers), unauthorizedHint: hint
+            )
+        } catch ProviderError.http(400), ProviderError.unauthorized {
+            usage = try await HTTP.json(
+                Usage.self, URLRequest("https://api.anthropic.com/api/oauth/usage", headers: headers), unauthorizedHint: hint
+            )
+        }
         let profile = try? await HTTP.json(
             Profile.self, URLRequest("https://api.anthropic.com/api/oauth/profile", headers: headers), unauthorizedHint: hint
         )
@@ -136,6 +143,78 @@ struct ClaudeProvider: UsageProvider {
         var extra_usage: Extra?
         var limits: [Limit]?
         var seven_day_breakdown: Breakdown?
+        var cedar_ember: CedarEmber?
+    }
+
+    struct CedarEmber: Decodable {
+        struct Grant: Decodable {
+            var id: String?
+            var usable_now: Bool?
+            var resets_left: Int?
+            var starts_at: String?
+            var ends_at: String?
+            var paused: Bool?
+        }
+
+        var eligible: Bool?
+        var grants: [Grant]?
+        var next_grant_id: String?
+    }
+
+    /// Counts resets in grants that are live now: not paused, started, not expired.
+    static func banked(_ cedar: CedarEmber?, now: Date = .now) -> BankedResets? {
+        guard let cedar, cedar.eligible != false else { return nil }
+        let live = (cedar.grants ?? []).filter { grant in
+            guard grant.paused != true, (grant.resets_left ?? 0) > 0 else { return false }
+            if let start = ISODate.parse(grant.starts_at), start > now { return false }
+            if let end = ISODate.parse(grant.ends_at), end <= now { return false }
+            return true
+        }
+        let count = live.reduce(0) { $0 + ($1.resets_left ?? 0) }
+        guard count > 0 else { return nil }
+        let next = live.first { $0.id != nil && $0.id == cedar.next_grant_id && $0.usable_now == true }
+        return BankedResets(count: count, nextExpiry: live.compactMap { ISODate.parse($0.ends_at) }.min(), grantID: next?.id)
+    }
+
+    /// Spends one banked reset. Each call gets a fresh request id, so it's one claim per click.
+    static func redeem(grantID: String) async throws -> String {
+        let credentials = try resolveCredentials()
+        guard let oauth = credentials.claudeAiOauth, !credentials.isExpired else {
+            throw ProviderError.unauthorized("Sign-in expired. Run `claude` once to refresh it.")
+        }
+        let headers = requestHeaders(token: oauth.accessToken)
+        let hint = "Claude rejected the sign-in. Run `claude` and sign in again."
+        let profile = try await HTTP.json(Profile.self, URLRequest("https://api.anthropic.com/api/oauth/profile", headers: headers), unauthorizedHint: hint)
+        guard let org = profile.organization?.uuid else { throw ProviderError.badResponse("no organization") }
+        var request = URLRequest("https://api.anthropic.com/api/organizations/\(org)/reset_rate_limits", method: "POST", headers: headers)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "program": "cedar_ember", "grant_id": grantID, "request_id": UUID().uuidString.lowercased(),
+        ])
+        struct Claim: Decodable { var result: String }
+        let claim = try await HTTP.json(Claim.self, request, unauthorizedHint: hint)
+        return claimMessage(claim.result)
+    }
+
+    static func claimMessage(_ result: String) -> String {
+        switch result {
+        case "reset": "Limits reset. Fresh quota is available."
+        case "not_limited": "Nothing to reset right now. The reset is still banked."
+        case "already_used": "That reset was already used."
+        case "cooldown": "Claude is cooling down. Try again shortly."
+        case "ineligible": "This account can't use banked resets."
+        default: "Claude couldn't confirm the reset. Refresh to check."
+        }
+    }
+
+    static func requestHeaders(token: String) -> [String: String] {
+        [
+            "Authorization": "Bearer \(token)",
+            "anthropic-beta": "oauth-2025-04-20",
+            "Accept": "application/json",
+            // Banked resets ("cedar_ember") are only reported to a current Claude Code CLI.
+            "User-Agent": "claude-cli/\(cliVersion) (external, cli)",
+        ]
     }
 
     struct Profile: Decodable {
@@ -144,7 +223,12 @@ struct ClaudeProvider: UsageProvider {
             var email: String?
         }
 
+        struct Organization: Decodable {
+            var uuid: String?
+        }
+
         var account: Account?
+        var organization: Organization?
     }
 
     static func snapshot(usage: Usage, profile: Profile?, oauth: Credentials.OAuth, now: Date = .now) -> Snapshot {
@@ -164,9 +248,37 @@ struct ClaudeProvider: UsageProvider {
             windows: windows,
             account: Account(user: user, plan: plan(subscription: oauth.subscriptionType, tier: oauth.rateLimitTier)),
             details: details,
+            banked: banked(usage.cedar_ember, now: now),
             fetchedAt: now
         )
     }
+
+    /// Installed Claude Code version, without running it: the native installer links `claude`
+    /// to `versions/<version>`; npm installs keep it in package.json.
+    static var cliVersion: String {
+        let fallback = "2.1.306"
+        guard let binary = Executable.path("claude")?.resolvingSymlinksInPath() else { return fallback }
+        if isVersion(binary.lastPathComponent) { return binary.lastPathComponent }
+        var folder = binary.deletingLastPathComponent()
+        for _ in 0 ..< 4 {
+            if let data = try? Data(contentsOf: folder.appending(path: "package.json")),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               json["name"] as? String == "@anthropic-ai/claude-code",
+               let version = json["version"] as? String
+            {
+                return version
+            }
+            folder.deleteLastPathComponent()
+        }
+        return fallback
+    }
+
+    static func isVersion(_ text: String) -> Bool {
+        text.wholeMatch(of: /\d+\.\d+\.\d+/) != nil
+    }
+
+    static let sessionLength: TimeInterval = 5 * 3600
+    static let weekLength: TimeInterval = 7 * 86400
 
     static func windows(from limits: [Usage.Limit]) -> [UsageWindow] {
         limits.compactMap { limit in
@@ -174,12 +286,12 @@ struct ClaudeProvider: UsageProvider {
             let resets = ISODate.parse(limit.resets_at)
             switch limit.kind {
             case "session":
-                return UsageWindow(id: "session", label: "Session", kind: .primary, used: percent / 100, resetsAt: resets)
+                return UsageWindow(id: "session", label: "Session", kind: .primary, used: percent / 100, resetsAt: resets, duration: Self.sessionLength)
             case "weekly_all":
-                return UsageWindow(id: "weekly", label: "Weekly", kind: .primary, used: percent / 100, resetsAt: resets)
+                return UsageWindow(id: "weekly", label: "Weekly", kind: .primary, used: percent / 100, resetsAt: resets, duration: Self.weekLength)
             case "weekly_scoped":
                 let model = limit.scope?.model?.display_name ?? "Model"
-                return UsageWindow(id: "weekly-\(model.lowercased())", label: "\(model) weekly", kind: .secondary, used: percent / 100, resetsAt: resets)
+                return UsageWindow(id: "weekly-\(model.lowercased())", label: "\(model) weekly", kind: .secondary, used: percent / 100, resetsAt: resets, duration: Self.weekLength)
             default:
                 return nil
             }
@@ -195,7 +307,10 @@ struct ClaudeProvider: UsageProvider {
         ]
         return entries.compactMap { id, label, kind, window -> UsageWindow? in
             guard let utilization = window?.utilization else { return nil }
-            return UsageWindow(id: id, label: label, kind: kind, used: utilization / 100, resetsAt: ISODate.parse(window?.resets_at))
+            return UsageWindow(
+                id: id, label: label, kind: kind, used: utilization / 100, resetsAt: ISODate.parse(window?.resets_at),
+                duration: id == "session" ? Self.sessionLength : Self.weekLength
+            )
         }
     }
 

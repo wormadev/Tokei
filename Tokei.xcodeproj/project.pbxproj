@@ -8,10 +8,12 @@
 
 /* Begin PBXBuildFile section */
 		0836BFA8E8D56CE0628545BB /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B61407B2CFEB93A936F082D /* AppDelegate.swift */; };
+		22941665A63560473D6190D7 /* Pace.swift in Sources */ = {isa = PBXBuildFile; fileRef = A157B972C6869B944B79ED20 /* Pace.swift */; };
 		27958737654CEB15BC805AFD /* Sparkline.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6DEABF64020329A8AFDC03E /* Sparkline.swift */; };
 		2E512E31B66DFF82C4460EF1 /* Design.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D262AABFE36BC635BFC03E7 /* Design.swift */; };
 		343C1813725E920C90EBA573 /* Refresher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C61C853F2F27EC5ECCE0595 /* Refresher.swift */; };
 		346114937A3B201BB7DC11E0 /* Executable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95B8EF40C67EF3FECA5B3CE6 /* Executable.swift */; };
+		35277AD31E5AE00EE182453D /* ResetNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6059790B6A749A88BDC5DF1 /* ResetNotifier.swift */; };
 		3CDE0534E77981C93CE5A2CC /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78C8F98A6E779DA6DD75C52F /* SettingsView.swift */; };
 		5075099FD0BC32B469D5D11A /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = E31A5B3C2101D318218CB0EB /* Keychain.swift */; };
 		5343E1F936712730FFA3E7B5 /* StatusBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7663DA1D359EBAA5B88482E7 /* StatusBarController.swift */; };
@@ -22,6 +24,7 @@
 		A731346DE4A709DC83C246F7 /* ClaudeProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AB0FD45491FA3C485858165 /* ClaudeProvider.swift */; };
 		AB93EDFEBAB707819E310C59 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = E82CB690456EFC3AA5DC6636 /* Models.swift */; };
 		B02139C7980CE99615A559CE /* ProviderParsingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C188A44B996D92F148A576A /* ProviderParsingTests.swift */; };
+		C41947D5A96581F0B62F2933 /* AgentActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6216EEFA0838076E7929A1AC /* AgentActivity.swift */; };
 		DF41AFA7B1984D8A3EC282FC /* PanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E349BBE3B651F19D8AC07BD8 /* PanelView.swift */; };
 		EF98BB08A44F710B0A43DE6A /* JWT.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1033648AF590B0C87498D0B /* JWT.swift */; };
 		F69041983B3CE9E8B6993CCB /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 00E03FF902691C591C0EB605 /* AppIcon.icon */; };
@@ -43,6 +46,7 @@
 		0C61C853F2F27EC5ECCE0595 /* Refresher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Refresher.swift; sourceTree = "<group>"; };
 		1C188A44B996D92F148A576A /* ProviderParsingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderParsingTests.swift; sourceTree = "<group>"; };
 		42222E421C5185122D65605C /* Connector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Connector.swift; sourceTree = "<group>"; };
+		6216EEFA0838076E7929A1AC /* AgentActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActivity.swift; sourceTree = "<group>"; };
 		6AB0FD45491FA3C485858165 /* ClaudeProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeProvider.swift; sourceTree = "<group>"; };
 		7663DA1D359EBAA5B88482E7 /* StatusBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarController.swift; sourceTree = "<group>"; };
 		7674EDB32DA50758819C1B3A /* Prefs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Prefs.swift; sourceTree = "<group>"; };
@@ -52,6 +56,8 @@
 		8B61407B2CFEB93A936F082D /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		95B8EF40C67EF3FECA5B3CE6 /* Executable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Executable.swift; sourceTree = "<group>"; };
 		9FC10BBA76DF653345CC43C5 /* Tokei.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tokei.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A157B972C6869B944B79ED20 /* Pace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pace.swift; sourceTree = "<group>"; };
+		A6059790B6A749A88BDC5DF1 /* ResetNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResetNotifier.swift; sourceTree = "<group>"; };
 		ABF540167562E6D9F84E6B4D /* HTTP.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTP.swift; sourceTree = "<group>"; };
 		AFECC1E5F96727B7B7269205 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D5A1CFE3728E18372EA5ED7B /* RefresherTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RefresherTests.swift; sourceTree = "<group>"; };
@@ -81,6 +87,7 @@
 				F1033648AF590B0C87498D0B /* JWT.swift */,
 				E31A5B3C2101D318218CB0EB /* Keychain.swift */,
 				E82CB690456EFC3AA5DC6636 /* Models.swift */,
+				A157B972C6869B944B79ED20 /* Pace.swift */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -99,10 +106,12 @@
 		89DC53732392CF05D38BC861 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				6216EEFA0838076E7929A1AC /* AgentActivity.swift */,
 				8B61407B2CFEB93A936F082D /* AppDelegate.swift */,
 				42222E421C5185122D65605C /* Connector.swift */,
 				7674EDB32DA50758819C1B3A /* Prefs.swift */,
 				0C61C853F2F27EC5ECCE0595 /* Refresher.swift */,
+				A6059790B6A749A88BDC5DF1 /* ResetNotifier.swift */,
 				7663DA1D359EBAA5B88482E7 /* StatusBarController.swift */,
 			);
 			path = App;
@@ -242,6 +251,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C41947D5A96581F0B62F2933 /* AgentActivity.swift in Sources */,
 				0836BFA8E8D56CE0628545BB /* AppDelegate.swift in Sources */,
 				A731346DE4A709DC83C246F7 /* ClaudeProvider.swift in Sources */,
 				FDE6AB73ECD9FEA652B37FA5 /* CodexProvider.swift in Sources */,
@@ -252,9 +262,11 @@
 				EF98BB08A44F710B0A43DE6A /* JWT.swift in Sources */,
 				5075099FD0BC32B469D5D11A /* Keychain.swift in Sources */,
 				AB93EDFEBAB707819E310C59 /* Models.swift in Sources */,
+				22941665A63560473D6190D7 /* Pace.swift in Sources */,
 				DF41AFA7B1984D8A3EC282FC /* PanelView.swift in Sources */,
 				8E0D8D59F6EB213EA51A78F4 /* Prefs.swift in Sources */,
 				343C1813725E920C90EBA573 /* Refresher.swift in Sources */,
+				35277AD31E5AE00EE182453D /* ResetNotifier.swift in Sources */,
 				3CDE0534E77981C93CE5A2CC /* SettingsView.swift in Sources */,
 				27958737654CEB15BC805AFD /* Sparkline.swift in Sources */,
 				5343E1F936712730FFA3E7B5 /* StatusBarController.swift in Sources */,

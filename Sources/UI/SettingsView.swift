@@ -79,7 +79,7 @@ struct SettingsView: View {
             if let id = ProviderID(rawValue: page) {
                 ProviderPage(id: id, refresher: refresher, connector: connector).id(id)
             } else {
-                GeneralSettings(installed: refresher.installed)
+                GeneralSettings()
             }
         }
     }
@@ -114,51 +114,57 @@ private struct ProviderSidebarRow: View {
 }
 
 private struct GeneralSettings: View {
-    let installed: Set<ProviderID>
-    @AppStorage(Prefs.refreshIntervalKey) private var interval = 300
+    @AppStorage(Prefs.refreshIntervalKey) private var interval = Prefs.agentAwareInterval
     @AppStorage(Prefs.refreshOnOpenKey) private var refreshOnOpen = true
-    @AppStorage(Prefs.menuBarStyleKey) private var menuBarStyle = MenuBarStyle.highest.rawValue
+    @AppStorage(Prefs.notifyResetsKey) private var notifyResets = true
+    @AppStorage(Prefs.menuBarWeeklyKey) private var menuBarWeekly = false
+    @AppStorage(Prefs.menuBarSessionKey) private var menuBarSession = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
 
-    /// Providers that aren't installed can't feed the menu bar.
-    private var menuBarStyles: [MenuBarStyle] {
-        MenuBarStyle.all.filter { style in
-            if case let .provider(id) = style { return installed.contains(id) }
-            return true
-        }
-    }
-
     private var refreshFooter: String {
-        switch (interval < 0, refreshOnOpen) {
-        case (true, true): "Usage updates only when you open the panel (if older than a minute)."
-        case (true, false): "Usage updates only when you press Refresh (⌘R)."
-        case (false, true): "Opening the panel also refreshes anything older than a minute. Background refresh pauses while the Mac sleeps or is locked."
-        case (false, false): "Background refresh pauses while the Mac sleeps or is locked."
+        let background = switch interval {
+        case Prefs.agentAwareInterval: "Every 2 minutes while Claude Code or Codex is working, every 15 minutes when idle."
+        case Prefs.neverInterval: refreshOnOpen ? "Usage updates only when you open the panel (if older than a minute)." : "Usage updates only when you press Refresh (⌘R)."
+        default: refreshOnOpen ? "Opening the panel also refreshes anything older than a minute." : ""
         }
+        return [background, interval == Prefs.neverInterval ? "" : "Pauses while the Mac sleeps or is locked."]
+            .filter { !$0.isEmpty }.joined(separator: " ")
     }
 
     var body: some View {
         Form {
             Section {
                 Picker("Refresh in background", selection: $interval) {
+                    Text("Agent aware").tag(Prefs.agentAwareInterval)
+                    Divider()
                     ForEach([60, 120, 300, 600, 900, 1800], id: \.self) { Text("Every \($0 / 60) min").tag($0) }
                     Divider()
                     ForEach([3600, 7200, 14400], id: \.self) { Text("Every \($0 / 3600) h").tag($0) }
                     Divider()
-                    Text("Never").tag(-1)
+                    Text("Never").tag(Prefs.neverInterval)
                 }
                 Toggle("Refresh when opening the panel", isOn: $refreshOnOpen)
             } footer: {
                 Text(refreshFooter)
             }
             Section {
-                Picker("Menu bar", selection: $menuBarStyle) {
-                    ForEach(menuBarStyles) { style in
-                        Text(style.label).tag(style.rawValue)
-                        if style == .highest { Divider() }
+                Toggle("Notify when a limit resets", isOn: $notifyResets)
+                    .onChange(of: notifyResets) { _, on in
+                        if on { ResetNotifier.requestPermissionIfEnabled() }
                     }
-                }
+            } footer: {
+                Text("Session and weekly limits, for providers shown in the panel.")
+            }
+            Section {
+                Toggle("Weekly", isOn: $menuBarWeekly)
+                Toggle("5-hour session", isOn: $menuBarSession)
+            } header: {
+                Text("Menu bar numbers")
+            } footer: {
+                Text("From the first provider in your list, next to its rings. With both on they stack: session on top, weekly below.")
+            }
+            Section {
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, on in
                         do {
@@ -185,6 +191,8 @@ private struct DisplaySettings: View {
     @AppStorage(Prefs.showModelLimitsKey) private var showModelLimits = false
     @AppStorage(Prefs.showHistoryKey) private var showHistory = false
     @AppStorage(Prefs.absoluteResetsKey) private var absoluteResets = false
+    @AppStorage(Prefs.usageDisplayKey) private var usageDisplay = UsageDisplay.used.rawValue
+    @AppStorage(Prefs.showPaceKey) private var showPace = true
 
     private var snapshots: [Snapshot] {
         refresher.enabled.compactMap { refresher.states[$0]?.snapshot }
@@ -198,12 +206,25 @@ private struct DisplaySettings: View {
         Form {
             Section("Always shown: session and weekly limits") {
                 Toggle("Account and plan", isOn: $showAccount)
+                VStack(alignment: .leading, spacing: 2) {
+                    Toggle("Pace", isOn: $showPace)
+                    Text("Ahead or behind an even spread over the window, and whether it lasts until reset.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 toggle("Spend, credits and breakdown", isOn: $showDetails, available: snapshots.contains { !$0.details.isEmpty },
                        note: "None of your providers report spend or credits right now.")
                 toggle("Per-model limits", isOn: $showModelLimits, available: snapshots.contains { $0.windows.contains { $0.kind == .secondary } },
                        note: "None of your providers report per-model limits right now.")
                 toggle("Usage history (7 days)", isOn: $showHistory, available: historyReady,
                        note: "Builds up as Tokei runs: one point per limit every 15 minutes.")
+            }
+            Section {
+                Picker("Show usage", selection: $usageDisplay) {
+                    ForEach(UsageDisplay.allCases) { Text($0.label).tag($0.rawValue) }
+                }
+                .pickerStyle(.segmented)
+            } footer: {
+                Text(usageDisplay == UsageDisplay.used.rawValue ? "Bars, rings and numbers fill up as you use your plan." : "Bars, rings and numbers show what's left and empty out as you use your plan.")
             }
             Section {
                 Toggle("Show reset as clock time", isOn: $absoluteResets)

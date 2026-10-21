@@ -5,6 +5,7 @@ import Testing
 private struct StubProvider: UsageProvider {
     let id: ProviderID
     var installed = true
+    var activityFolder: URL { URL.temporaryDirectory }
     func isInstalled() -> Bool { installed }
     func fetch() async throws -> Snapshot { throw ProviderError.http(500) }
 }
@@ -59,7 +60,7 @@ struct RefresherTests {
     @Test func `due after interval, and after retryAt when failing`() {
         let refresher = makeRefresher()
         let now = Date(timeIntervalSince1970: 1_000_000)
-        #expect(refresher.isDue(.claude, now: now))
+        #expect(refresher.isDue(.claude, now: now, interval: 300))
         refresher.apply(.success(snapshot(used: 0.1, at: now)), to: .claude, now: now)
         #expect(!refresher.isDue(.claude, now: now.addingTimeInterval(299), interval: 300))
         #expect(refresher.isDue(.claude, now: now.addingTimeInterval(300), interval: 300))
@@ -77,6 +78,31 @@ struct RefresherTests {
         #expect(Refresher.backoff(error: error, failures: 20, interval: 300) == 1800)
         #expect(Refresher.backoff(error: ProviderError.rateLimited(retryAfter: nil), failures: 1, interval: 60) == 300)
         #expect(Refresher.backoff(error: ProviderError.rateLimited(retryAfter: 1200), failures: 1, interval: 60) == 1200)
+    }
+}
+
+struct AgentActivityTests {
+    @MainActor
+    @Test func `a write in a watched folder records activity`() async throws {
+        let folder = URL.temporaryDirectory.appending(path: "tokei-activity-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let activity = AgentActivity(latency: 0.1)
+        activity.watch([.claude: folder])
+        try await Task.sleep(for: .milliseconds(300))
+        try Data("x".utf8).write(to: folder.appending(path: "session.jsonl"))
+        for _ in 0 ..< 50 where activity.lastActivity[.claude] == nil {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        #expect(activity.lastActivity[.claude] != nil)
+        #expect(activity.lastActivity[.codex] == nil)
+    }
+
+    @Test func `two minutes while an agent wrote recently, fifteen when idle`() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        #expect(AgentActivity.interval(lastActivity: now.addingTimeInterval(-60), now: now) == 120)
+        #expect(AgentActivity.interval(lastActivity: now.addingTimeInterval(-6 * 60), now: now) == 900)
+        #expect(AgentActivity.interval(lastActivity: nil, now: now) == 900)
     }
 }
 
@@ -112,18 +138,6 @@ struct FormattingTests {
         #expect(HTTP.retryAfter("Mon, 12 Jan 1970 13:46:40 GMT", now: now) == 0)
         #expect(HTTP.retryAfter(nil) == nil)
     }
-
-    @Test func `menu bar shows the most constrained primary window`() {
-        var states: [ProviderID: ProviderState] = [:]
-        let now = Date.now
-        states[.claude] = ProviderState(snapshot: Snapshot(windows: [
-            UsageWindow(id: "session", label: "", kind: .primary, used: 0.4),
-            UsageWindow(id: "opus", label: "", kind: .secondary, used: 0.99),
-        ], account: Account(), fetchedAt: now))
-        states[.codex] = ProviderState(snapshot: snapshot(used: 0.7, at: now))
-        #expect(StatusBarController.highestUsage(states, enabled: [.claude, .codex]) == 0.7)
-        #expect(StatusBarController.highestUsage(states, enabled: [.claude]) == 0.4)
-    }
 }
 
 struct MenuRingsTests {
@@ -155,15 +169,18 @@ struct MenuRingsTests {
 }
 
 struct PrefsTests {
-    @Test func `menu bar style round trips and picks its sources`() {
-        #expect(MenuBarStyle(rawValue: "icon") == .icon)
-        #expect(MenuBarStyle(rawValue: "codex") == .provider(.codex))
-        #expect(MenuBarStyle(rawValue: nil) == .highest)
-        #expect(MenuBarStyle(rawValue: "removed-provider") == .highest)
-        #expect(MenuBarStyle.provider(.codex).rawValue == "codex")
-        #expect(MenuBarStyle.icon.sources(enabled: [.claude]) == nil)
-        #expect(MenuBarStyle.highest.sources(enabled: [.claude, .codex]) == [.claude, .codex])
-        #expect(MenuBarStyle.provider(.codex).sources(enabled: [.claude]) == [.codex])
+    @Test func `usage display flips used and remaining`() {
+        #expect(UsageDisplay.used.text(0.43) == "43%")
+        #expect(UsageDisplay.remaining.text(0.43) == "57%")
+        #expect(UsageDisplay.remaining.value(1.2) == 0)
+    }
+
+    @Test func `menu bar lines stack session over weekly without labels`() {
+        let rings = StatusBarController.Rings(session: 0.13, weekly: 0.43)
+        #expect(StatusBarController.menuLines(rings, weekly: true, session: true, display: .used) == ["13%", "43%"])
+        #expect(StatusBarController.menuLines(rings, weekly: false, session: true, display: .remaining) == ["87%"])
+        #expect(StatusBarController.menuLines(rings, weekly: false, session: false, display: .used).isEmpty)
+        #expect(StatusBarController.menuLines(.init(session: nil, weekly: 0.5), weekly: true, session: true, display: .used) == ["50%"])
     }
 
     @Test func `provider order keeps saved order and appends missing providers`() {
@@ -174,5 +191,24 @@ struct PrefsTests {
         #expect(Prefs.providerOrder == [.codex, .claude])
         Prefs.providerOrder = [.claude, .codex]
         #expect(Prefs.providerOrder == [.claude, .codex])
+    }
+}
+
+struct ResetDetectionTests {
+    private let now = Date(timeIntervalSince1970: 1_000_000)
+
+    private func snap(_ used: Double, resets: TimeInterval?, kind: UsageWindow.Kind = .primary) -> Snapshot {
+        Snapshot(windows: [UsageWindow(id: "session", label: "Session", kind: kind, used: used, resetsAt: resets.map { now.addingTimeInterval($0) })], account: Account(), fetchedAt: now)
+    }
+
+    @Test func `usage drop with the reset time moving forward is a reset`() {
+        #expect(Refresher.resets(old: snap(0.6, resets: 0), new: snap(0.0, resets: 5 * 3600)).map(\.id) == ["session"])
+    }
+
+    @Test func `jitter, unused limits and per-model limits are not resets`() {
+        #expect(Refresher.resets(old: snap(0.6, resets: 0), new: snap(0.5, resets: 120)).isEmpty)
+        #expect(Refresher.resets(old: snap(0.0, resets: 0), new: snap(0.0, resets: 5 * 3600)).isEmpty)
+        #expect(Refresher.resets(old: snap(0.6, resets: 0, kind: .secondary), new: snap(0, resets: 5 * 3600, kind: .secondary)).isEmpty)
+        #expect(Refresher.resets(old: snap(0.6, resets: nil), new: snap(0, resets: 5 * 3600)).isEmpty)
     }
 }

@@ -25,10 +25,12 @@ final class Refresher {
     private(set) var installed: Set<ProviderID> = []
     private(set) var history = History()
 
+    @ObservationIgnored var onReset: ((ProviderID, UsageWindow) -> Void)?
     @ObservationIgnored private let providers: [ProviderID: any UsageProvider]
     @ObservationIgnored private let store: StateStore
     @ObservationIgnored private var loop: Task<Void, Never>?
     /// Separate flags: waking usually lands on the lock screen, which must stay paused.
+    @ObservationIgnored private let activity = AgentActivity()
     @ObservationIgnored private var asleep = false
     @ObservationIgnored private var locked = false
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
@@ -47,6 +49,11 @@ final class Refresher {
         Prefs.providerOrder.filter { Prefs.isEnabled($0) && installed.contains($0) }
     }
 
+    private func watchAgents() {
+        guard Prefs.refreshSetting == Prefs.agentAwareInterval else { return }
+        activity.watch(Dictionary(uniqueKeysWithValues: providers.values.map { ($0.id, $0.activityFolder) }))
+    }
+
     /// Re-checked every tick so a CLI installed while Tokei runs shows up within a minute.
     func detectInstalled() {
         let found = Set(providers.values.filter { $0.isInstalled() }.map(\.id))
@@ -58,6 +65,7 @@ final class Refresher {
         loop = Task { [weak self] in
             while !Task.isCancelled {
                 self?.detectInstalled()
+                self?.watchAgents()
                 await self?.refreshDue()
                 try? await Task.sleep(for: .seconds(30), tolerance: .seconds(10))
             }
@@ -82,13 +90,22 @@ final class Refresher {
     func refreshDue(now: Date = .now) async {
         guard !asleep, !locked else { return }
         await withTaskGroup(of: Void.self) { group in
-            for id in enabled where isDue(id, now: now) {
+            for id in enabled where isDue(id, now: now, interval: interval(for: id, now: now)) {
                 group.addTask { await self.refresh(id) }
             }
         }
     }
 
-    func isDue(_ id: ProviderID, now: Date, interval: TimeInterval? = Prefs.refreshInterval) -> Bool {
+    /// nil: no background refresh (Never).
+    func interval(for id: ProviderID, now: Date) -> TimeInterval? {
+        switch Prefs.refreshSetting {
+        case Prefs.agentAwareInterval: AgentActivity.interval(lastActivity: activity.lastActivity[id], now: now)
+        case Prefs.neverInterval: nil
+        default: Prefs.refreshInterval
+        }
+    }
+
+    func isDue(_ id: ProviderID, now: Date, interval: TimeInterval?) -> Bool {
         guard let state = states[id], let last = state.lastAttempt else { return true }
         // "Only when opened": no background refresh after the first fetch.
         guard let interval else { return false }
@@ -114,6 +131,9 @@ final class Refresher {
         state.lastAttempt = now
         switch result {
         case let .success(snapshot):
+            if let old = state.snapshot {
+                for window in Self.resets(old: old, new: snapshot) { onReset?(id, window) }
+            }
             state.snapshot = snapshot
             state.error = nil
             state.needsConnect = nil
@@ -133,6 +153,19 @@ final class Refresher {
         }
         states[id] = state
         store.save(.init(states: states, history: history))
+    }
+
+    /// Limits that reset between two snapshots: usage dropped and the reset time moved forward
+    /// (by more than reset-time jitter). Only real limits that had been used count.
+    nonisolated static func resets(old: Snapshot, new: Snapshot) -> [UsageWindow] {
+        new.windows.filter { window in
+            guard window.kind == .primary,
+                  let before = old.windows.first(where: { $0.id == window.id }),
+                  before.used > 0.01, window.used < before.used,
+                  let oldReset = before.resetsAt, let newReset = window.resetsAt
+            else { return false }
+            return newReset.timeIntervalSince(oldReset) > 10 * 60
+        }
     }
 
     func clear(_ id: ProviderID) {

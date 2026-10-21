@@ -101,6 +101,13 @@ struct ProviderCard: View {
                         absoluteResets: absoluteResets
                     )
                 }
+                // Always shown: a banked reset is the one number you can act on.
+                if let banked = snapshot.banked {
+                    BankedRow(id: id, banked: banked, connector: connector, now: now)
+                }
+                if let notice = connector.notices[id] {
+                    Text(notice).font(.caption).foregroundStyle(.secondary)
+                }
                 if snapshot.windows.isEmpty {
                     Text("No limits reported").font(.caption).foregroundStyle(.secondary)
                 }
@@ -155,11 +162,61 @@ struct ProviderCard: View {
     }
 }
 
+/// Banked resets, with a Reset button that needs a second click: spending one can't be undone.
+struct BankedRow: View {
+    let id: ProviderID
+    let banked: BankedResets
+    let connector: Connector
+    let now: Date
+    @State private var confirming = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Label(banked.text(now: now), systemImage: "arrow.counterclockwise.circle")
+                .font(.callout)
+            Spacer()
+            if let grantID = banked.grantID {
+                if connector.redeeming.contains(id) {
+                    ProgressView().controlSize(.small)
+                } else if confirming {
+                    Button("Cancel") { confirming = false }
+                    Button("Use reset") {
+                        confirming = false
+                        connector.redeem(id, grantID: grantID)
+                    }
+                    .tint(.orange)
+                } else {
+                    Button("Reset") { confirming = true }
+                        .help("Resets your session and weekly limits now")
+                }
+            }
+        }
+        .controlSize(.small)
+        .buttonStyle(.bordered)
+        .task(id: confirming) {
+            // Back out of the confirm state on its own if left alone.
+            guard confirming else { return }
+            try? await Task.sleep(for: .seconds(5))
+            confirming = false
+        }
+    }
+}
+
 struct WindowRow: View {
     let window: UsageWindow
     let history: [History.Point]
     let now: Date
     let absoluteResets: Bool
+    @AppStorage(Prefs.usageDisplayKey) private var usageDisplay = UsageDisplay.used.rawValue
+    @AppStorage(Prefs.showPaceKey) private var showPace = true
+
+    private var display: UsageDisplay { UsageDisplay(rawValue: usageDisplay) ?? .used }
+
+    /// Hidden once the limit is used up: "in deficit" adds nothing then.
+    private var pace: Pace? {
+        guard showPace, window.used < 1 else { return nil }
+        return Pace(window: window, now: now)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -171,13 +228,22 @@ struct WindowRow: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                Text("\(Int((window.used * 100).rounded()))%")
+                Text(display == .used ? display.text(window.used) : "\(display.text(window.used)) left")
                     .font(.callout.weight(.semibold))
                     .monospacedDigit()
-                    .contentTransition(.numericText(value: window.used))
+                    .contentTransition(.numericText(value: display.value(window.used)))
                     .frame(minWidth: 40, alignment: .trailing)
             }
-            UsageBar(used: window.used)
+            UsageBar(used: window.used, display: display, pace: pace)
+            if let pace {
+                HStack {
+                    Text(pace.summary)
+                        .foregroundStyle(pace.delta > 0 && !pace.isOnTrack ? AnyShapeStyle(Color.orange) : AnyShapeStyle(.secondary))
+                    Spacer()
+                    Text(pace.forecast(now: now)).foregroundStyle(.secondary)
+                }
+                .font(.caption)
+            }
             if history.count > 1 {
                 Sparkline(points: history).frame(height: 24)
             }
@@ -188,6 +254,8 @@ struct WindowRow: View {
 
 struct UsageBar: View {
     let used: Double
+    var display: UsageDisplay = .used
+    var pace: Pace?
 
     var body: some View {
         GeometryReader { proxy in
@@ -195,7 +263,15 @@ struct UsageBar: View {
                 Capsule().fill(.fill.tertiary)
                 Capsule()
                     .fill(Design.color(for: used))
-                    .frame(width: proxy.size.width * min(max(used, 0), 1))
+                    // Color stays keyed to usage: red means nearly out in either mode.
+                    .frame(width: proxy.size.width * min(max(display.value(used), 0), 1))
+                // Where usage would be with an even spread over the window.
+                if let pace, !pace.isOnTrack {
+                    Capsule()
+                        .fill(Design.paceColor(pace))
+                        .frame(width: 2, height: 10)
+                        .offset(x: proxy.size.width * display.value(pace.expected) - 1)
+                }
             }
         }
         .frame(height: 6)
