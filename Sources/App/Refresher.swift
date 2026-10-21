@@ -8,6 +8,8 @@ struct ProviderState: Codable, Equatable {
     var error: String?
     /// The card offers Connect / Sign in. Optional so older saved state still decodes.
     var needsConnect: Bool?
+    /// Rate limit, network or server hiccup: the last numbers still stand. Optional for old state.
+    var transient: Bool?
     var failures = 0
     var lastAttempt: Date?
     /// Earliest next background attempt after a failure or 429.
@@ -78,7 +80,7 @@ final class Refresher {
     }
 
     /// Panel opened: anything older than a minute is worth a quiet refresh.
-    func refreshStale(maxAge: TimeInterval = 60) {
+    func refreshStale(maxAge: TimeInterval = 120) {
         detectInstalled()
         let now = Date.now
         for id in enabled where (states[id]?.lastAttempt).map({ now.timeIntervalSince($0) > maxAge }) ?? true {
@@ -137,6 +139,7 @@ final class Refresher {
             state.snapshot = snapshot
             state.error = nil
             state.needsConnect = nil
+            state.transient = nil
             state.failures = 0
             state.retryAt = nil
             history.record(id, snapshot: snapshot)
@@ -147,6 +150,7 @@ final class Refresher {
             default: break
             }
             if case .needsConnect? = error as? ProviderError { state.needsConnect = true } else { state.needsConnect = nil }
+            state.transient = Self.isTransient(error) ? true : nil
             state.failures += 1
             state.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             state.retryAt = now.addingTimeInterval(Self.backoff(error: error, failures: state.failures))
@@ -171,6 +175,14 @@ final class Refresher {
     func clear(_ id: ProviderID) {
         states[id] = nil
         store.save(.init(states: states, history: history))
+    }
+
+    nonisolated static func isTransient(_ error: Error) -> Bool {
+        switch error as? ProviderError {
+        case .rateLimited?, .http?, .badResponse?: true
+        case .notConfigured?, .needsConnect?, .unauthorized?: false
+        case nil: error is URLError
+        }
     }
 
     /// Doubles the interval per consecutive failure, capped at 30 min. 429 waits at least 5 min.

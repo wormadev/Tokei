@@ -52,9 +52,10 @@ final class AgentActivity {
         }
     }
 
-    /// Agent-aware schedule: every 2 min while an agent wrote in the last 5 min, else 15 min.
+    /// Agent-aware schedule: every 5 min while an agent wrote in the last 5 min, else 15 min.
+    /// Faster gets Claude's usage endpoint answering 429.
     nonisolated static func interval(lastActivity: Date?, now: Date) -> TimeInterval {
         guard let lastActivity, now.timeIntervalSince(lastActivity) < 5 * 60 else { return 15 * 60 }
-        return 2 * 60
+        return 5 * 60
     }
 }

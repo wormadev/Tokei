@@ -81,6 +81,16 @@ struct RefresherTests {
     }
 }
 
+struct TransientErrorTests {
+    @Test func `rate limits and server errors are transient, sign-in problems are not`() {
+        #expect(Refresher.isTransient(ProviderError.rateLimited(retryAfter: nil)))
+        #expect(Refresher.isTransient(ProviderError.http(503)))
+        #expect(Refresher.isTransient(URLError(.notConnectedToInternet)))
+        #expect(!Refresher.isTransient(ProviderError.unauthorized("x")))
+        #expect(!Refresher.isTransient(ProviderError.needsConnect("x")))
+    }
+}
+
 struct AgentActivityTests {
     @MainActor
     @Test func `a write in a watched folder records activity`() async throws {
@@ -98,9 +108,9 @@ struct AgentActivityTests {
         #expect(activity.lastActivity[.codex] == nil)
     }
 
-    @Test func `two minutes while an agent wrote recently, fifteen when idle`() {
+    @Test func `five minutes while an agent wrote recently, fifteen when idle`() {
         let now = Date(timeIntervalSince1970: 1_000_000)
-        #expect(AgentActivity.interval(lastActivity: now.addingTimeInterval(-60), now: now) == 120)
+        #expect(AgentActivity.interval(lastActivity: now.addingTimeInterval(-60), now: now) == 300)
         #expect(AgentActivity.interval(lastActivity: now.addingTimeInterval(-6 * 60), now: now) == 900)
         #expect(AgentActivity.interval(lastActivity: nil, now: now) == 900)
     }
