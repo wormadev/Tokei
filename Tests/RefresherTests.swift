@@ -1,5 +1,5 @@
 import Foundation
-@testable import Quota
+@testable import Tokei
 import Testing
 
 private struct StubProvider: UsageProvider {

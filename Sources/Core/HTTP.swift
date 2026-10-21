@@ -45,7 +45,7 @@ enum HTTP {
         guard UserDefaults.standard.bool(forKey: "debugDumpResponses"), request.httpMethod == "GET",
               let url = request.url, let host = url.host()
         else { return }
-        let dir = URL.applicationSupportDirectory.appending(path: "Quota/debug")
+        let dir = URL.applicationSupportDirectory.appending(path: "Tokei/debug")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let name = (host + url.path()).replacingOccurrences(of: "/", with: "_")
         try? data.write(to: dir.appending(path: "\(name).json"))

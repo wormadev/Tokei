@@ -49,7 +49,7 @@ final class StatusBarController: NSObject {
             menu.addItem(withTitle: "Refresh", action: #selector(refreshAll), keyEquivalent: "r").target = self
             menu.addItem(withTitle: "Settings…", action: #selector(showSettings), keyEquivalent: ",").target = self
             menu.addItem(.separator())
-            menu.addItem(withTitle: "Quit Quota", action: #selector(NSApplication.terminate), keyEquivalent: "q")
+            menu.addItem(withTitle: "Quit Tokei", action: #selector(NSApplication.terminate), keyEquivalent: "q")
             item.menu = menu
             item.button?.performClick(nil)
             item.menu = nil
@@ -80,9 +80,7 @@ final class StatusBarController: NSObject {
     }
 
     private func update() {
-        let image = NSImage(systemSymbolName: "gauge.with.dots.needle.50percent", accessibilityDescription: "Quota")
-        image?.isTemplate = true
-        item.button?.image = image
+        if item.button?.image == nil { item.button?.image = Self.ringsMark }
         let style = MenuBarStyle(rawValue: UserDefaults.standard.string(forKey: Prefs.menuBarStyleKey))
         let usage = style.sources(enabled: refresher.enabled).flatMap { Self.highestUsage(refresher.states, enabled: $0) }
         let title = usage.map { " \(Int(($0 * 100).rounded()))%" } ?? ""
@@ -93,6 +91,26 @@ final class StatusBarController: NSObject {
             )
         }
     }
+
+    /// The app icon's two rings as a template image, so it follows the menu bar's appearance.
+    static let ringsMark: NSImage = {
+        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
+            let center = NSPoint(x: 9, y: 9)
+            // Same sweeps as the icon: outer 290°, inner 200°, clockwise from 12 o'clock.
+            for (radius, sweep) in [(7.0, 290.0), (3.6, 200.0)] {
+                let path = NSBezierPath()
+                path.appendArc(withCenter: center, radius: radius, startAngle: 90, endAngle: 90 - sweep, clockwise: true)
+                path.lineWidth = 2.2
+                path.lineCapStyle = .round
+                NSColor.black.setStroke()
+                path.stroke()
+            }
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = "Tokei"
+        return image
+    }()
 
     /// The most constrained primary window across the given providers: what limits you first.
     nonisolated static func highestUsage(_ states: [ProviderID: ProviderState], enabled: [ProviderID]) -> Double? {

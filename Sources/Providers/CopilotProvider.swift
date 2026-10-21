@@ -2,7 +2,7 @@ import Foundation
 
 struct CopilotProvider: UsageProvider {
     let id = ProviderID.copilot
-    static let keychainService = "com.wormadev.Quota"
+    static let keychainService = "com.wormadev.Tokei"
     static let keychainAccount = "copilot-github-token"
 
     static var token: String? {

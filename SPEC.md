@@ -1,4 +1,4 @@
-# Quota
+# Tokei
 
 Menu bar app showing AI coding plan usage for Claude, Codex, Cursor, Gemini and Copilot. A from-scratch replacement for CodexBar (MIT, used as reference for endpoints only, no code copied). macOS 26+, Liquid Glass.
 
