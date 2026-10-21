@@ -116,6 +116,7 @@ private struct ProviderSidebarRow: View {
 private struct GeneralSettings: View {
     @AppStorage(Prefs.refreshIntervalKey) private var interval = 300
     @AppStorage(Prefs.refreshOnOpenKey) private var refreshOnOpen = true
+    @AppStorage(Prefs.notifyResetsKey) private var notifyResets = true
     @AppStorage(Prefs.menuBarWeeklyKey) private var menuBarWeekly = false
     @AppStorage(Prefs.menuBarSessionKey) private var menuBarSession = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -143,6 +144,14 @@ private struct GeneralSettings: View {
                 Toggle("Refresh when opening the panel", isOn: $refreshOnOpen)
             } footer: {
                 Text(refreshFooter)
+            }
+            Section {
+                Toggle("Notify when a limit resets", isOn: $notifyResets)
+                    .onChange(of: notifyResets) { _, on in
+                        if on { ResetNotifier.requestPermissionIfEnabled() }
+                    }
+            } footer: {
+                Text("Session and weekly limits, for providers shown in the panel.")
             }
             Section {
                 Toggle("Weekly", isOn: $menuBarWeekly)

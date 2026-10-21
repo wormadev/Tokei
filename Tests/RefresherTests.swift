@@ -167,3 +167,22 @@ struct PrefsTests {
         #expect(Prefs.providerOrder == [.claude, .codex])
     }
 }
+
+struct ResetDetectionTests {
+    private let now = Date(timeIntervalSince1970: 1_000_000)
+
+    private func snap(_ used: Double, resets: TimeInterval?, kind: UsageWindow.Kind = .primary) -> Snapshot {
+        Snapshot(windows: [UsageWindow(id: "session", label: "Session", kind: kind, used: used, resetsAt: resets.map { now.addingTimeInterval($0) })], account: Account(), fetchedAt: now)
+    }
+
+    @Test func `usage drop with the reset time moving forward is a reset`() {
+        #expect(Refresher.resets(old: snap(0.6, resets: 0), new: snap(0.0, resets: 5 * 3600)).map(\.id) == ["session"])
+    }
+
+    @Test func `jitter, unused limits and per-model limits are not resets`() {
+        #expect(Refresher.resets(old: snap(0.6, resets: 0), new: snap(0.5, resets: 120)).isEmpty)
+        #expect(Refresher.resets(old: snap(0.0, resets: 0), new: snap(0.0, resets: 5 * 3600)).isEmpty)
+        #expect(Refresher.resets(old: snap(0.6, resets: 0, kind: .secondary), new: snap(0, resets: 5 * 3600, kind: .secondary)).isEmpty)
+        #expect(Refresher.resets(old: snap(0.6, resets: nil), new: snap(0, resets: 5 * 3600)).isEmpty)
+    }
+}

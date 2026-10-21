@@ -25,6 +25,7 @@ final class Refresher {
     private(set) var installed: Set<ProviderID> = []
     private(set) var history = History()
 
+    @ObservationIgnored var onReset: ((ProviderID, UsageWindow) -> Void)?
     @ObservationIgnored private let providers: [ProviderID: any UsageProvider]
     @ObservationIgnored private let store: StateStore
     @ObservationIgnored private var loop: Task<Void, Never>?
@@ -114,6 +115,9 @@ final class Refresher {
         state.lastAttempt = now
         switch result {
         case let .success(snapshot):
+            if let old = state.snapshot {
+                for window in Self.resets(old: old, new: snapshot) { onReset?(id, window) }
+            }
             state.snapshot = snapshot
             state.error = nil
             state.needsConnect = nil
@@ -133,6 +137,19 @@ final class Refresher {
         }
         states[id] = state
         store.save(.init(states: states, history: history))
+    }
+
+    /// Limits that reset between two snapshots: usage dropped and the reset time moved forward
+    /// (by more than reset-time jitter). Only real limits that had been used count.
+    nonisolated static func resets(old: Snapshot, new: Snapshot) -> [UsageWindow] {
+        new.windows.filter { window in
+            guard window.kind == .primary,
+                  let before = old.windows.first(where: { $0.id == window.id }),
+                  before.used > 0.01, window.used < before.used,
+                  let oldReset = before.resetsAt, let newReset = window.resetsAt
+            else { return false }
+            return newReset.timeIntervalSince(oldReset) > 10 * 60
+        }
     }
 
     func clear(_ id: ProviderID) {

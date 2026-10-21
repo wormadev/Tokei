@@ -13,6 +13,7 @@
 		2E512E31B66DFF82C4460EF1 /* Design.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D262AABFE36BC635BFC03E7 /* Design.swift */; };
 		343C1813725E920C90EBA573 /* Refresher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C61C853F2F27EC5ECCE0595 /* Refresher.swift */; };
 		346114937A3B201BB7DC11E0 /* Executable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95B8EF40C67EF3FECA5B3CE6 /* Executable.swift */; };
+		35277AD31E5AE00EE182453D /* ResetNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6059790B6A749A88BDC5DF1 /* ResetNotifier.swift */; };
 		3CDE0534E77981C93CE5A2CC /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78C8F98A6E779DA6DD75C52F /* SettingsView.swift */; };
 		5075099FD0BC32B469D5D11A /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = E31A5B3C2101D318218CB0EB /* Keychain.swift */; };
 		5343E1F936712730FFA3E7B5 /* StatusBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7663DA1D359EBAA5B88482E7 /* StatusBarController.swift */; };
@@ -54,6 +55,7 @@
 		95B8EF40C67EF3FECA5B3CE6 /* Executable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Executable.swift; sourceTree = "<group>"; };
 		9FC10BBA76DF653345CC43C5 /* Tokei.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tokei.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A157B972C6869B944B79ED20 /* Pace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pace.swift; sourceTree = "<group>"; };
+		A6059790B6A749A88BDC5DF1 /* ResetNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResetNotifier.swift; sourceTree = "<group>"; };
 		ABF540167562E6D9F84E6B4D /* HTTP.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTP.swift; sourceTree = "<group>"; };
 		AFECC1E5F96727B7B7269205 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D5A1CFE3728E18372EA5ED7B /* RefresherTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RefresherTests.swift; sourceTree = "<group>"; };
@@ -106,6 +108,7 @@
 				42222E421C5185122D65605C /* Connector.swift */,
 				7674EDB32DA50758819C1B3A /* Prefs.swift */,
 				0C61C853F2F27EC5ECCE0595 /* Refresher.swift */,
+				A6059790B6A749A88BDC5DF1 /* ResetNotifier.swift */,
 				7663DA1D359EBAA5B88482E7 /* StatusBarController.swift */,
 			);
 			path = App;
@@ -259,6 +262,7 @@
 				DF41AFA7B1984D8A3EC282FC /* PanelView.swift in Sources */,
 				8E0D8D59F6EB213EA51A78F4 /* Prefs.swift in Sources */,
 				343C1813725E920C90EBA573 /* Refresher.swift in Sources */,
+				35277AD31E5AE00EE182453D /* ResetNotifier.swift in Sources */,
 				3CDE0534E77981C93CE5A2CC /* SettingsView.swift in Sources */,
 				27958737654CEB15BC805AFD /* Sparkline.swift in Sources */,
 				5343E1F936712730FFA3E7B5 /* StatusBarController.swift in Sources */,
