@@ -238,7 +238,7 @@ struct WindowRow: View {
             if let pace {
                 HStack {
                     Text(pace.summary)
-                        .foregroundStyle(pace.isOnTrack ? AnyShapeStyle(.secondary) : AnyShapeStyle(Design.paceColor(pace)))
+                        .foregroundStyle(pace.delta > 0 && !pace.isOnTrack ? AnyShapeStyle(Color.orange) : AnyShapeStyle(.secondary))
                     Spacer()
                     Text(pace.forecast(now: now)).foregroundStyle(.secondary)
                 }
