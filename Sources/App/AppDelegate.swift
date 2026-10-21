@@ -13,8 +13,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private var refresher: Refresher!
+    private var connector: Connector!
     private var statusBar: StatusBarController!
-    private lazy var settings = SettingsWindowController(refresher: refresher)
+    private lazy var settings = SettingsWindowController(refresher: refresher, connector: connector)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Unit tests use the app as host: no status item, no live fetches, no Keychain.
@@ -24,7 +25,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         refresher = Refresher(providers: [
             ClaudeProvider(), CodexProvider(), CursorProvider(), GeminiProvider(), CopilotProvider(),
         ])
-        statusBar = StatusBarController(refresher: refresher, openSettings: { [weak self] in self?.settings.show() })
+        connector = Connector(refresher: refresher)
+        statusBar = StatusBarController(refresher: refresher, connector: connector, openSettings: { [weak self] in self?.settings.show() })
         refresher.start()
         #if DEBUG
         // `-debugShowPanel YES` / `-debugShowSettings YES`: open UI at launch for screenshots.

@@ -11,12 +11,14 @@ enum Prefs {
     static let absoluteResetsKey = "show.absoluteResets"
     static let didDetectKey = "didDetectProviders"
     static let providerOrderKey = "providerOrder"
+    static let refreshOnOpenKey = "refreshOnOpen"
 
     static func enabledKey(_ id: ProviderID) -> String { "enabled.\(id.rawValue)" }
 
     static func registerDefaults() {
         var defaults: [String: Any] = [
             refreshIntervalKey: 300,
+            refreshOnOpenKey: true,
             menuBarStyleKey: MenuBarStyle.highest.rawValue,
             showAccountKey: true,
             showDetailsKey: false,
@@ -28,8 +30,15 @@ enum Prefs {
         UserDefaults.standard.register(defaults: defaults)
     }
 
-    static var refreshInterval: TimeInterval {
-        TimeInterval(max(60, UserDefaults.standard.integer(forKey: refreshIntervalKey)))
+    /// Seconds between background refreshes; nil for "Only when opened" (stored as -1).
+    static var refreshInterval: TimeInterval? {
+        let raw = UserDefaults.standard.integer(forKey: refreshIntervalKey)
+        if raw < 0 { return nil }
+        return raw == 0 ? 300 : TimeInterval(max(60, raw))
+    }
+
+    static var refreshOnOpen: Bool {
+        UserDefaults.standard.object(forKey: refreshOnOpenKey) as? Bool ?? true
     }
 
     /// Panel order. Stored as "claude,codex,…"; providers missing from it are appended.

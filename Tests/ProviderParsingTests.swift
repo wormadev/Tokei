@@ -19,12 +19,34 @@ struct ClaudeParsingTests {
         let profile = try decode(ClaudeProvider.Profile.self, #"{"account":{"email_address":"a@b.c"}}"#)
         let snapshot = ClaudeProvider.snapshot(usage: usage, profile: profile, oauth: oauth)
 
-        #expect(snapshot.windows.map(\.id) == ["session", "weekly", "sonnet"])
+        #expect(snapshot.windows.map(\.id) == ["session", "weekly", "weekly-sonnet"])
         #expect(snapshot.windows[0].used == 0.42)
         #expect(snapshot.windows[0].resetsAt != nil)
         #expect(snapshot.windows[2].kind == .secondary)
         #expect(snapshot.account == Account(user: "a@b.c", plan: "Max 20x"))
         #expect(snapshot.details.first?.label == "Extra usage")
+    }
+
+    @Test func `prefers the limits array, with model scoped weekly as secondary, and adds the breakdown`() throws {
+        let usage = try decode(ClaudeProvider.Usage.self, """
+        {"five_hour":{"utilization":99,"resets_at":null},"seven_day_opus":null,
+         "limits":[{"kind":"session","percent":12,"resets_at":"2026-10-21T20:39:59.592170+00:00","scope":null},
+                   {"kind":"weekly_all","percent":43,"resets_at":"2026-10-24T20:59:59.592194+00:00"},
+                   {"kind":"weekly_scoped","percent":5,"resets_at":"2026-10-24T21:00:00+00:00",
+                    "scope":{"model":{"id":null,"display_name":"Example"},"surface":null}},
+                   {"kind":"something_new","percent":1}],
+         "extra_usage":{"is_enabled":false,"monthly_limit":null,"used_credits":null},
+         "seven_day_breakdown":{"rows":[{"key":"claude_code","display_name":"Claude Code","percent":100},
+                                        {"key":"chat","display_name":"Chats","percent":0}]}}
+        """)
+        let oauth = ClaudeProvider.Credentials.OAuth(accessToken: "x", expiresAt: nil, subscriptionType: "pro", rateLimitTier: nil)
+        let snapshot = ClaudeProvider.snapshot(usage: usage, profile: nil, oauth: oauth)
+        #expect(snapshot.windows.map(\.id) == ["session", "weekly", "weekly-example"])
+        #expect(snapshot.windows[0].used == 0.12)
+        #expect(snapshot.windows[0].resetsAt != nil)
+        #expect(snapshot.windows[2].label == "Example weekly")
+        #expect(snapshot.windows[2].kind == .secondary)
+        #expect(snapshot.details == [Detail(label: "Claude Code this week", value: "100%")])
     }
 
     @Test func `plan name without multiplier`() {

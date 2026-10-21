@@ -11,7 +11,7 @@ struct CopilotProvider: UsageProvider {
 
     func fetch() async throws -> Snapshot {
         guard let token = Self.token else {
-            throw ProviderError.notConfigured("Sign in with GitHub in Settings › Providers.")
+            throw ProviderError.needsConnect("Sign in with GitHub to see your Copilot quota.")
         }
         let headers = [
             "Authorization": "token \(token)",
@@ -21,7 +21,7 @@ struct CopilotProvider: UsageProvider {
             "User-Agent": "GitHubCopilotChat/0.26.7",
             "X-Github-Api-Version": "2025-04-01",
         ]
-        let hint = "GitHub rejected the token. Sign in again in Settings › Providers."
+        let hint = "GitHub rejected the token. Sign out in Settings, then sign in again."
         let user = try await HTTP.json(CopilotUser.self, URLRequest("https://api.github.com/copilot_internal/user", headers: headers), unauthorizedHint: hint)
         let login = try? await HTTP.json(GitHubUser.self, URLRequest("https://api.github.com/user", headers: headers), unauthorizedHint: hint)
         return Self.snapshot(user: user, login: login?.login)

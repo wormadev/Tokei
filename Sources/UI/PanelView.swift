@@ -3,6 +3,7 @@ import SwiftUI
 
 struct PanelView: View {
     let refresher: Refresher
+    let connector: Connector
     let openSettings: () -> Void
     /// `refresher.enabled` reads UserDefaults, which SwiftUI doesn't observe; bump on any change.
     @State private var defaultsChanges = 0
@@ -19,7 +20,7 @@ struct PanelView: View {
                     TimelineView(.periodic(from: .now, by: 30)) { context in
                         VStack(spacing: 8) {
                             ForEach(refresher.enabled) { id in
-                                ProviderCard(id: id, state: refresher.states[id] ?? ProviderState(), history: refresher.history, now: context.date)
+                                ProviderCard(id: id, state: refresher.states[id] ?? ProviderState(), history: refresher.history, connector: connector, now: context.date)
                             }
                         }
                     }
@@ -76,6 +77,7 @@ struct ProviderCard: View {
     let id: ProviderID
     let state: ProviderState
     let history: History
+    let connector: Connector
     let now: Date
 
     @AppStorage(Prefs.showAccountKey) private var showAccount = true
@@ -114,13 +116,24 @@ struct ProviderCard: View {
                     }
                 }
             }
-            if let error = state.error {
+            if let error = connector.errors[id] ?? state.error {
                 // Markdown so `claude` renders as code.
                 Label(LocalizedStringKey(error), systemImage: state.snapshot == nil ? "info.circle" : "exclamationmark.triangle")
                     .font(.caption)
                     .foregroundStyle(state.snapshot == nil ? .secondary : Color.orange)
                     .lineLimit(2)
                     .textSelection(.enabled)
+            }
+            if id == .copilot, let code = connector.copilotCode {
+                HStack(spacing: 8) {
+                    Text("Enter **\(code)** on GitHub (copied)").font(.caption)
+                    Spacer()
+                    ProgressView().controlSize(.small)
+                    Button("Cancel", action: connector.cancelCopilot).controlSize(.small)
+                }
+            } else if state.needsConnect == true, let title = connector.actionTitle(id) {
+                Button(title) { connector.connect(id) }
+                    .controlSize(.small)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

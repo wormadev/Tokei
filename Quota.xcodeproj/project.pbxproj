@@ -24,6 +24,7 @@
 		BE24AF35A7B48FDECD2BFBF0 /* Sparkline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AA921FA5D0B465F2221CA13 /* Sparkline.swift */; };
 		C59DD8B91569CA2DFD17A92C /* GeminiProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A523CE9E092C15C4E741688 /* GeminiProvider.swift */; };
 		D5CB420093BDBB3E13021E8C /* Design.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB04D5C7BF70BF9F0B1B188D /* Design.swift */; };
+		EC007E1CB1104A911118FF2B /* Connector.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEB2ADA910075951ADC96996 /* Connector.swift */; };
 		EC0F23E302A8FDD8191FF414 /* ProviderParsingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3310743028A3B5FA58DD25B9 /* ProviderParsingTests.swift */; };
 		ED8F647652F2EF377DFB00A1 /* CursorProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0248E93102CFF440DD4D2D1D /* CursorProvider.swift */; };
 		FCA9660943200CD3C87B9D13 /* CopilotProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EC11A8DD9764FDA0EFA7694 /* CopilotProvider.swift */; };
@@ -63,6 +64,7 @@
 		DBD50F87A92F84B0E86A5FEF /* Quota.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Quota.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E35B90BCA7A905FEA5A01338 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		E9801A97BA6990FE0402C4D2 /* ClaudeProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeProvider.swift; sourceTree = "<group>"; };
+		EEB2ADA910075951ADC96996 /* Connector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Connector.swift; sourceTree = "<group>"; };
 		F8A03F845518A166773C7D05 /* CodexProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexProvider.swift; sourceTree = "<group>"; };
 		FFDCCE9B478788D8F45B7A76 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -107,6 +109,7 @@
 			isa = PBXGroup;
 			children = (
 				7994D6E706912A42DEC54260 /* AppDelegate.swift */,
+				EEB2ADA910075951ADC96996 /* Connector.swift */,
 				385AE8C1F674D52996AEB978 /* Prefs.swift */,
 				4EBB614639D9825995D93159 /* Refresher.swift */,
 				150CF51A8DE937CCF1088953 /* StatusBarController.swift */,
@@ -280,6 +283,7 @@
 				5344ACF752A2CC2B0FAAE080 /* AppDelegate.swift in Sources */,
 				760B04072076B6FD821FFA8E /* ClaudeProvider.swift in Sources */,
 				BE13E24A565B5549944FDF6F /* CodexProvider.swift in Sources */,
+				EC007E1CB1104A911118FF2B /* Connector.swift in Sources */,
 				FCA9660943200CD3C87B9D13 /* CopilotProvider.swift in Sources */,
 				ED8F647652F2EF377DFB00A1 /* CursorProvider.swift in Sources */,
 				D5CB420093BDBB3E13021E8C /* Design.swift in Sources */,

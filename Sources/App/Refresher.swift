@@ -6,6 +6,8 @@ struct ProviderState: Codable, Equatable {
     /// Last good data. Kept through errors so the panel never blanks out.
     var snapshot: Snapshot?
     var error: String?
+    /// The card offers Connect / Sign in. Optional so older saved state still decodes.
+    var needsConnect: Bool?
     var failures = 0
     var lastAttempt: Date?
     /// Earliest next background attempt after a failure or 429.
@@ -75,10 +77,12 @@ final class Refresher {
         }
     }
 
-    func isDue(_ id: ProviderID, now: Date) -> Bool {
+    func isDue(_ id: ProviderID, now: Date, interval: TimeInterval? = Prefs.refreshInterval) -> Bool {
         guard let state = states[id], let last = state.lastAttempt else { return true }
+        // "Only when opened": no background refresh after the first fetch.
+        guard let interval else { return false }
         if let retryAt = state.retryAt { return now >= retryAt }
-        return now.timeIntervalSince(last) >= Prefs.refreshInterval
+        return now.timeIntervalSince(last) >= interval
     }
 
     func refresh(_ id: ProviderID) async {
@@ -101,12 +105,17 @@ final class Refresher {
         case let .success(snapshot):
             state.snapshot = snapshot
             state.error = nil
+            state.needsConnect = nil
             state.failures = 0
             state.retryAt = nil
             history.record(id, snapshot: snapshot)
         case let .failure(error):
             // Signed out or credentials gone: old numbers would belong to a different (or no) account.
-            if case .notConfigured = error as? ProviderError { state.snapshot = nil }
+            switch error as? ProviderError {
+            case .notConfigured?, .needsConnect?: state.snapshot = nil
+            default: break
+            }
+            if case .needsConnect? = error as? ProviderError { state.needsConnect = true } else { state.needsConnect = nil }
             state.failures += 1
             state.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             state.retryAt = now.addingTimeInterval(Self.backoff(error: error, failures: state.failures))
@@ -121,7 +130,7 @@ final class Refresher {
     }
 
     /// Doubles the interval per consecutive failure, capped at 30 min. 429 waits at least 5 min.
-    static func backoff(error: Error, failures: Int, interval: TimeInterval = Prefs.refreshInterval) -> TimeInterval {
+    static func backoff(error: Error, failures: Int, interval: TimeInterval = Prefs.refreshInterval ?? 300) -> TimeInterval {
         let exponential = min(interval * pow(2, Double(max(0, failures - 1))), 30 * 60)
         if case let .rateLimited(retryAfter) = error as? ProviderError {
             return max(retryAfter ?? 0, 5 * 60, exponential)

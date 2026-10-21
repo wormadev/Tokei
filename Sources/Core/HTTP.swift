@@ -28,12 +28,29 @@ enum HTTP {
 
     static func json<T: Decodable>(_ type: T.Type, _ request: URLRequest, unauthorizedHint: String) async throws -> T {
         let data = try await data(request, unauthorizedHint: unauthorizedHint)
+        #if DEBUG
+        dumpForDebugging(request, data)
+        #endif
         do {
             return try JSONDecoder().decode(T.self, from: data)
         } catch {
             throw ProviderError.badResponse(String(describing: error).prefix(160).description)
         }
     }
+
+    #if DEBUG
+    /// `-debugDumpResponses YES`: saves GET response bodies to see real API shapes.
+    /// GET only: token endpoints are POSTs, so no secrets land on disk.
+    private static func dumpForDebugging(_ request: URLRequest, _ data: Data) {
+        guard UserDefaults.standard.bool(forKey: "debugDumpResponses"), request.httpMethod == "GET",
+              let url = request.url, let host = url.host()
+        else { return }
+        let dir = URL.applicationSupportDirectory.appending(path: "Quota/debug")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let name = (host + url.path()).replacingOccurrences(of: "/", with: "_")
+        try? data.write(to: dir.appending(path: "\(name).json"))
+    }
+    #endif
 
     /// Retry-After is either delta-seconds or an HTTP date.
     static func retryAfter(_ value: String?, now: Date = .now) -> TimeInterval? {

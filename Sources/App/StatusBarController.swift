@@ -5,11 +5,13 @@ import SwiftUI
 @MainActor
 final class StatusBarController: NSObject {
     private let refresher: Refresher
+    private let connector: Connector
     private let openSettings: () -> Void
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private lazy var panel: Panel = {
         let panel = Panel(rootView: PanelView(
             refresher: refresher,
+            connector: connector,
             openSettings: { [weak self] in
                 self?.panel.hide()
                 self?.openSettings()
@@ -19,8 +21,9 @@ final class StatusBarController: NSObject {
         return panel
     }()
 
-    init(refresher: Refresher, openSettings: @escaping () -> Void) {
+    init(refresher: Refresher, connector: Connector, openSettings: @escaping () -> Void) {
         self.refresher = refresher
+        self.connector = connector
         self.openSettings = openSettings
         super.init()
         item.button?.target = self
@@ -58,7 +61,7 @@ final class StatusBarController: NSObject {
     }
 
     func showPanel() {
-        refresher.refreshStale()
+        if Prefs.refreshOnOpen { refresher.refreshStale() }
         panel.show(below: item.button)
     }
 

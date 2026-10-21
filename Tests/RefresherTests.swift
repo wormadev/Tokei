@@ -38,6 +38,11 @@ struct RefresherTests {
         #expect(refresher.states[.claude]?.snapshot == nil)
         #expect(refresher.states[.claude]?.error == "Sign in")
 
+        refresher.apply(.failure(ProviderError.needsConnect("Connect")), to: .claude, now: now)
+        #expect(refresher.states[.claude]?.needsConnect == true)
+        refresher.apply(.success(snapshot(used: 0.1, at: now)), to: .claude, now: now)
+        #expect(refresher.states[.claude]?.needsConnect == nil)
+
         refresher.clear(.claude)
         #expect(refresher.states[.claude] == nil)
     }
@@ -47,12 +52,13 @@ struct RefresherTests {
         let now = Date(timeIntervalSince1970: 1_000_000)
         #expect(refresher.isDue(.claude, now: now))
         refresher.apply(.success(snapshot(used: 0.1, at: now)), to: .claude, now: now)
-        #expect(!refresher.isDue(.claude, now: now.addingTimeInterval(Prefs.refreshInterval - 1)))
-        #expect(refresher.isDue(.claude, now: now.addingTimeInterval(Prefs.refreshInterval)))
+        #expect(!refresher.isDue(.claude, now: now.addingTimeInterval(299), interval: 300))
+        #expect(refresher.isDue(.claude, now: now.addingTimeInterval(300), interval: 300))
+        #expect(!refresher.isDue(.claude, now: now.addingTimeInterval(86400), interval: nil))
 
         refresher.apply(.failure(ProviderError.rateLimited(retryAfter: 900)), to: .claude, now: now)
-        #expect(!refresher.isDue(.claude, now: now.addingTimeInterval(899)))
-        #expect(refresher.isDue(.claude, now: now.addingTimeInterval(900)))
+        #expect(!refresher.isDue(.claude, now: now.addingTimeInterval(899), interval: 300))
+        #expect(refresher.isDue(.claude, now: now.addingTimeInterval(900), interval: 300))
     }
 
     @Test func `backoff doubles, caps at 30 minutes, 429 waits at least 5 minutes`() {
