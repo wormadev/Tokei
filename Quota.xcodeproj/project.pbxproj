@@ -10,6 +10,7 @@
 		201C820EEACCB777735414A1 /* JWT.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DF3669E75647F87C9658E21 /* JWT.swift */; };
 		208AD3F0FF72D0153FC2DED8 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 60B5EB050F2B954DF155745B /* libsqlite3.tbd */; };
 		27AC696057370F899B29D5B2 /* HTTP.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26D89EE3EB36054D899CC153 /* HTTP.swift */; };
+		284A60DCFBA3F2ACEB717588 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C90CA5B56FC8622B522AF231 /* Assets.xcassets */; };
 		2E10005AF1AB84F4DD88BA9E /* PanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ED06BEFBB55FCDD4D2D7F6C /* PanelView.swift */; };
 		33B9569034F49F2F261CC90B /* RefresherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2B18FCE2E14C931EB74250 /* RefresherTests.swift */; };
 		5344ACF752A2CC2B0FAAE080 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7994D6E706912A42DEC54260 /* AppDelegate.swift */; };
@@ -56,6 +57,7 @@
 		7ED06BEFBB55FCDD4D2D7F6C /* PanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelView.swift; sourceTree = "<group>"; };
 		8EC11A8DD9764FDA0EFA7694 /* CopilotProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotProvider.swift; sourceTree = "<group>"; };
 		AA2B18FCE2E14C931EB74250 /* RefresherTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RefresherTests.swift; sourceTree = "<group>"; };
+		C90CA5B56FC8622B522AF231 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CB04D5C7BF70BF9F0B1B188D /* Design.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design.swift; sourceTree = "<group>"; };
 		DBB9A4F747BC94D8A2CD8AC6 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
 		DBD50F87A92F84B0E86A5FEF /* Quota.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Quota.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -80,6 +82,7 @@
 		11AF0ED22C478EC73885BA9E /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				C90CA5B56FC8622B522AF231 /* Assets.xcassets */,
 				2F6A5B3264D5FFA2688BA44F /* Info.plist */,
 				451360F01236C4C2C1148754 /* App */,
 				FBEBC6F6518B5CE63E8544C2 /* Core */,
@@ -178,6 +181,7 @@
 			buildConfigurationList = 99350F87BCA90E5BF4AC2589 /* Build configuration list for PBXNativeTarget "Quota" */;
 			buildPhases = (
 				3554AC2C73BC457CEAD7619D /* Sources */,
+				4734567EFBD0B7F3ADFABEDD /* Resources */,
 				867193B63274FCA7580D7F9F /* Frameworks */,
 			);
 			buildRules = (
@@ -247,6 +251,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		4734567EFBD0B7F3ADFABEDD /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				284A60DCFBA3F2ACEB717588 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		351DBDDF5AEB224C213AAE3D /* Sources */ = {
