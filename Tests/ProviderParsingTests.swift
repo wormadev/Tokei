@@ -150,8 +150,18 @@ struct BankedResetTests {
         let banked = try #require(ClaudeProvider.banked(cedar, now: now))
         #expect(banked.count == 3)
         #expect(banked.nextExpiry == ISODate.parse("2026-11-03T00:00:00Z"))
+        #expect(banked.grantID == "g1")
         #expect(ClaudeProvider.banked(try decode(ClaudeProvider.CedarEmber.self, #"{"eligible":false,"grants":[{"resets_left":1}]}"#), now: now) == nil)
         #expect(ClaudeProvider.banked(nil, now: now) == nil)
+    }
+
+    @Test func `no reset button when the next grant can't be used now`() throws {
+        let cedar = try decode(ClaudeProvider.CedarEmber.self, #"{"eligible":true,"next_grant_id":"g1","grants":[{"id":"g1","resets_left":1,"paused":false,"usable_now":false}]}"#)
+        let banked = try #require(ClaudeProvider.banked(cedar, now: now))
+        #expect(banked.count == 1)
+        #expect(banked.grantID == nil)
+        #expect(ClaudeProvider.claimMessage("reset").hasPrefix("Limits reset"))
+        #expect(ClaudeProvider.claimMessage("something_new").contains("couldn't confirm"))
     }
 
     @Test func `codex counts available unexpired credits`() throws {

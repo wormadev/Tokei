@@ -58,6 +58,8 @@ struct Snapshot: Codable, Equatable, Sendable {
 struct BankedResets: Codable, Equatable, Sendable {
     var count: Int
     var nextExpiry: Date?
+    /// The grant Claude would spend next, when it can be used right now. Nil: no Reset button.
+    var grantID: String?
 
     func text(now: Date) -> String {
         let noun = count == 1 ? "1 banked reset" : "\(count) banked resets"

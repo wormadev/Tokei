@@ -103,8 +103,10 @@ struct ProviderCard: View {
                 }
                 // Always shown: a banked reset is the one number you can act on.
                 if let banked = snapshot.banked {
-                    Label(banked.text(now: now), systemImage: "arrow.counterclockwise.circle")
-                        .font(.callout)
+                    BankedRow(id: id, banked: banked, connector: connector, now: now)
+                }
+                if let notice = connector.notices[id] {
+                    Text(notice).font(.caption).foregroundStyle(.secondary)
                 }
                 if snapshot.windows.isEmpty {
                     Text("No limits reported").font(.caption).foregroundStyle(.secondary)
@@ -156,6 +158,46 @@ struct ProviderCard: View {
                     .foregroundStyle(.tertiary)
                     .help("Last updated \(fetched.formatted(date: .abbreviated, time: .standard))")
             }
+        }
+    }
+}
+
+/// Banked resets, with a Reset button that needs a second click: spending one can't be undone.
+struct BankedRow: View {
+    let id: ProviderID
+    let banked: BankedResets
+    let connector: Connector
+    let now: Date
+    @State private var confirming = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Label(banked.text(now: now), systemImage: "arrow.counterclockwise.circle")
+                .font(.callout)
+            Spacer()
+            if let grantID = banked.grantID {
+                if connector.redeeming.contains(id) {
+                    ProgressView().controlSize(.small)
+                } else if confirming {
+                    Button("Cancel") { confirming = false }
+                    Button("Use reset") {
+                        confirming = false
+                        connector.redeem(id, grantID: grantID)
+                    }
+                    .tint(.orange)
+                } else {
+                    Button("Reset") { confirming = true }
+                        .help("Resets your session and weekly limits now")
+                }
+            }
+        }
+        .controlSize(.small)
+        .buttonStyle(.bordered)
+        .task(id: confirming) {
+            // Back out of the confirm state on its own if left alone.
+            guard confirming else { return }
+            try? await Task.sleep(for: .seconds(5))
+            confirming = false
         }
     }
 }

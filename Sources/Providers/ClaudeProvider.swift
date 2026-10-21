@@ -81,13 +81,7 @@ struct ClaudeProvider: UsageProvider {
         if credentials.isExpired {
             throw ProviderError.unauthorized("Sign-in expired. Run `claude` once to refresh it.")
         }
-        let headers = [
-            "Authorization": "Bearer \(oauth.accessToken)",
-            "anthropic-beta": "oauth-2025-04-20",
-            "Accept": "application/json",
-            // Banked resets ("cedar_ember") are only reported to a current Claude Code CLI.
-            "User-Agent": "claude-cli/\(Self.cliVersion) (external, cli)",
-        ]
+        let headers = Self.requestHeaders(token: oauth.accessToken)
         let hint = "Claude rejected the sign-in. Run `claude` and sign in again."
         let usage: Usage
         do {
@@ -154,6 +148,8 @@ struct ClaudeProvider: UsageProvider {
 
     struct CedarEmber: Decodable {
         struct Grant: Decodable {
+            var id: String?
+            var usable_now: Bool?
             var resets_left: Int?
             var starts_at: String?
             var ends_at: String?
@@ -162,6 +158,7 @@ struct ClaudeProvider: UsageProvider {
 
         var eligible: Bool?
         var grants: [Grant]?
+        var next_grant_id: String?
     }
 
     /// Counts resets in grants that are live now: not paused, started, not expired.
@@ -175,7 +172,49 @@ struct ClaudeProvider: UsageProvider {
         }
         let count = live.reduce(0) { $0 + ($1.resets_left ?? 0) }
         guard count > 0 else { return nil }
-        return BankedResets(count: count, nextExpiry: live.compactMap { ISODate.parse($0.ends_at) }.min())
+        let next = live.first { $0.id != nil && $0.id == cedar.next_grant_id && $0.usable_now == true }
+        return BankedResets(count: count, nextExpiry: live.compactMap { ISODate.parse($0.ends_at) }.min(), grantID: next?.id)
+    }
+
+    /// Spends one banked reset. Each call gets a fresh request id, so it's one claim per click.
+    static func redeem(grantID: String) async throws -> String {
+        let credentials = try resolveCredentials()
+        guard let oauth = credentials.claudeAiOauth, !credentials.isExpired else {
+            throw ProviderError.unauthorized("Sign-in expired. Run `claude` once to refresh it.")
+        }
+        let headers = requestHeaders(token: oauth.accessToken)
+        let hint = "Claude rejected the sign-in. Run `claude` and sign in again."
+        let profile = try await HTTP.json(Profile.self, URLRequest("https://api.anthropic.com/api/oauth/profile", headers: headers), unauthorizedHint: hint)
+        guard let org = profile.organization?.uuid else { throw ProviderError.badResponse("no organization") }
+        var request = URLRequest("https://api.anthropic.com/api/organizations/\(org)/reset_rate_limits", method: "POST", headers: headers)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "program": "cedar_ember", "grant_id": grantID, "request_id": UUID().uuidString.lowercased(),
+        ])
+        struct Claim: Decodable { var result: String }
+        let claim = try await HTTP.json(Claim.self, request, unauthorizedHint: hint)
+        return claimMessage(claim.result)
+    }
+
+    static func claimMessage(_ result: String) -> String {
+        switch result {
+        case "reset": "Limits reset. Fresh quota is available."
+        case "not_limited": "Nothing to reset right now. The reset is still banked."
+        case "already_used": "That reset was already used."
+        case "cooldown": "Claude is cooling down. Try again shortly."
+        case "ineligible": "This account can't use banked resets."
+        default: "Claude couldn't confirm the reset. Refresh to check."
+        }
+    }
+
+    static func requestHeaders(token: String) -> [String: String] {
+        [
+            "Authorization": "Bearer \(token)",
+            "anthropic-beta": "oauth-2025-04-20",
+            "Accept": "application/json",
+            // Banked resets ("cedar_ember") are only reported to a current Claude Code CLI.
+            "User-Agent": "claude-cli/\(cliVersion) (external, cli)",
+        ]
     }
 
     struct Profile: Decodable {
@@ -184,7 +223,12 @@ struct ClaudeProvider: UsageProvider {
             var email: String?
         }
 
+        struct Organization: Decodable {
+            var uuid: String?
+        }
+
         var account: Account?
+        var organization: Organization?
     }
 
     static func snapshot(usage: Usage, profile: Profile?, oauth: Credentials.OAuth, now: Date = .now) -> Snapshot {

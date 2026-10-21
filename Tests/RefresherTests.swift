@@ -175,9 +175,9 @@ struct PrefsTests {
         #expect(UsageDisplay.remaining.value(1.2) == 0)
     }
 
-    @Test func `menu bar lines stack weekly over session and label only when both`() {
+    @Test func `menu bar lines stack session over weekly and label only when both`() {
         let rings = StatusBarController.Rings(session: 0.13, weekly: 0.43)
-        #expect(StatusBarController.menuLines(rings, weekly: true, session: true, display: .used) == ["W 43%", "5h 13%"])
+        #expect(StatusBarController.menuLines(rings, weekly: true, session: true, display: .used) == ["5h 13%", "W 43%"])
         #expect(StatusBarController.menuLines(rings, weekly: false, session: true, display: .remaining) == ["87%"])
         #expect(StatusBarController.menuLines(rings, weekly: false, session: false, display: .used).isEmpty)
         #expect(StatusBarController.menuLines(.init(session: nil, weekly: 0.5), weekly: true, session: true, display: .used) == ["W 50%"])

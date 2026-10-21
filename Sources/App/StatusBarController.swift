@@ -101,12 +101,13 @@ final class StatusBarController: NSObject {
         var display: UsageDisplay
     }
 
-    /// Weekly above session, matching outer/inner ring. Unknown values are left out.
+    /// Session above weekly, like the inner ring sits inside the outer one. Unknown values
+    /// are left out; labels only when both show.
     nonisolated static func menuLines(_ rings: Rings, weekly: Bool, session: Bool, display: UsageDisplay) -> [String] {
         let both = weekly && session
         return [
-            weekly ? rings.weekly.map { (both ? "W " : "") + display.text($0) } : nil,
             session ? rings.session.map { (both ? "5h " : "") + display.text($0) } : nil,
+            weekly ? rings.weekly.map { (both ? "W " : "") + display.text($0) } : nil,
         ].compactMap(\.self)
     }
 
@@ -129,12 +130,14 @@ final class StatusBarController: NSObject {
     /// menu bar's appearance. Outer ring = weekly, inner = 5h session; faint tracks keep the
     /// mark recognizable at 0%.
     static func statusImage(_ rings: Rings, lines: [String], display: UsageDisplay) -> NSImage {
-        let font = NSFont.monospacedDigitSystemFont(ofSize: lines.count > 1 ? 9 : 12, weight: .semibold)
+        // Full menu bar height so stacked numbers aren't squeezed into the rings' 18 pt.
+        let height: CGFloat = 22
+        let font = NSFont.monospacedDigitSystemFont(ofSize: lines.count > 1 ? 11 : 13, weight: .semibold)
         let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.black]
         let textWidth = lines.map { ($0 as NSString).size(withAttributes: attributes).width }.max() ?? 0
         let width = 18 + (lines.isEmpty ? 0 : 4 + ceil(textWidth))
-        let image = NSImage(size: NSSize(width: width, height: 18), flipped: false) { _ in
-            let center = NSPoint(x: 9, y: 9)
+        let image = NSImage(size: NSSize(width: width, height: height), flipped: false) { _ in
+            let center = NSPoint(x: 9, y: height / 2)
             for (radius, used) in [(7.0, rings.weekly), (3.6, rings.session)] {
                 let track = NSBezierPath()
                 track.appendArc(withCenter: center, radius: radius, startAngle: 0, endAngle: 360)
@@ -152,11 +155,12 @@ final class StatusBarController: NSObject {
                 NSColor.black.setStroke()
                 arc.stroke()
             }
-            let lineHeight = font.ascender - font.descender
-            let top = 9 + lineHeight * CGFloat(lines.count) / 2
+            // Lay digits out by cap height so the block is optically centered.
+            let gap: CGFloat = 3
+            let block = font.capHeight * CGFloat(lines.count) + gap * CGFloat(max(lines.count - 1, 0))
             for (index, line) in lines.enumerated() {
-                let y = top - lineHeight * CGFloat(index + 1) - font.descender
-                (line as NSString).draw(at: NSPoint(x: 22, y: y), withAttributes: attributes)
+                let baseline = (height + block) / 2 - font.capHeight - CGFloat(index) * (font.capHeight + gap)
+                (line as NSString).draw(at: NSPoint(x: 22, y: baseline + font.descender), withAttributes: attributes)
             }
             return true
         }
