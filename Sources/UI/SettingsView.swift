@@ -302,7 +302,7 @@ private struct ProviderPage: View {
     @ViewBuilder
     private var status: some View {
         let state = refresher.states[id]
-        if let error = connector.errors[id] ?? state?.error {
+        if let error = state?.error {
             Label(LocalizedStringKey(error), systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
         } else if let user = state?.snapshot?.account.user {
             Label("Connected as \(user)", systemImage: "checkmark.circle")
@@ -317,7 +317,7 @@ private struct ProviderPage: View {
     private var source: some View {
         switch id {
         case .claude:
-            caption("Reads Claude Code's sign-in from the Keychain. Connect from the Tokei panel.")
+            caption("Reads Claude Code's sign-in from the Keychain, the same way Claude Code does. No prompts.")
         case .codex:
             caption("Reads \(CodexProvider.authFile.path(percentEncoded: false)) from the Codex CLI.")
         }

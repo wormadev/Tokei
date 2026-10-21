@@ -73,8 +73,6 @@ struct BankedResets: Codable, Equatable, Sendable {
 
 enum ProviderError: Error, Equatable, LocalizedError {
     case notConfigured(String)
-    /// Fixable with the card's Connect / Sign in button.
-    case needsConnect(String)
     case unauthorized(String)
     case rateLimited(retryAfter: TimeInterval?)
     case http(Int)
@@ -82,7 +80,7 @@ enum ProviderError: Error, Equatable, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case let .notConfigured(hint), let .needsConnect(hint), let .unauthorized(hint): hint
+        case let .notConfigured(hint), let .unauthorized(hint): hint
         case .rateLimited: "Rate limited, retrying later"
         case let .http(code): "Server returned HTTP \(code)"
         case let .badResponse(detail): "Unexpected response: \(detail)"

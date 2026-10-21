@@ -14,12 +14,12 @@ enum Design {
         pace.delta > 0 ? .orange : .primary.opacity(0.6)
     }
 
-    /// Neutral until it matters: orange from 80%, red from 95%.
+    /// System accent until it matters: orange from 80%, red from 95%.
     static func color(for used: Double) -> Color {
         switch used {
         case 0.95...: .red
         case 0.8...: .orange
-        default: .primary.opacity(0.75)
+        default: .accentColor
         }
     }
 }

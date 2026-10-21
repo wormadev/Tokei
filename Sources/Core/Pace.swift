@@ -33,15 +33,18 @@ struct Pace: Equatable {
     /// Within 2 points of an even spread.
     var isOnTrack: Bool { abs(delta) <= 0.02 }
 
-    var summary: String {
-        let points = Int((abs(delta) * 100).rounded())
-        if points == 0 { return "On pace" }
-        return delta > 0 ? "\(points)% in deficit" : "\(points)% in reserve"
-    }
+    /// Usage at reset if the current rate holds, capped at 100%.
+    var projected: Double { min(expected > 0 ? (delta + expected) / expected : 0, 1) }
 
-    func forecast(now: Date) -> String {
-        guard let runsOutIn else { return "Lasts until reset" }
-        if runsOutIn <= 60 { return "Runs out now" }
-        return "Runs out \(TimeText.reset(now.addingTimeInterval(runsOutIn), now: now, absolute: false))"
+    var runsOut: Bool { runsOutIn != nil }
+
+    /// "~22% left at reset", or "Runs out in 2h" when the current rate won't last.
+    func headline(display: UsageDisplay, now: Date) -> String {
+        if let runsOutIn {
+            if runsOutIn <= 60 { return "Runs out now" }
+            return "Runs out \(TimeText.reset(now.addingTimeInterval(runsOutIn), now: now, absolute: false))"
+        }
+        let points = Int((display.value(projected) * 100).rounded())
+        return display == .used ? "~\(points)% used at reset" : "~\(points)% left at reset"
     }
 }

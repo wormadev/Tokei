@@ -129,17 +129,13 @@ struct ProviderCard: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .help(error)
-            } else if let error = connector.errors[id] ?? state.error {
+            } else if let error = state.error {
                 // Markdown so `claude` renders as code.
                 Label(LocalizedStringKey(error), systemImage: state.snapshot == nil ? "info.circle" : "exclamationmark.triangle")
                     .font(.caption)
                     .foregroundStyle(state.snapshot == nil ? .secondary : Color.orange)
                     .lineLimit(2)
                     .textSelection(.enabled)
-            }
-            if state.needsConnect == true, let title = connector.actionTitle(id) {
-                Button(title) { connector.connect(id) }
-                    .controlSize(.small)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -225,38 +221,36 @@ struct WindowRow: View {
 
     private var display: UsageDisplay { UsageDisplay(rawValue: usageDisplay) ?? .used }
 
-    /// Hidden once the limit is used up: "in deficit" adds nothing then.
+    /// Hidden once the limit is used up: a projection adds nothing then.
     private var pace: Pace? {
         guard showPace, window.used < 1 else { return nil }
         return Pace(window: window, now: now)
     }
 
+    /// Name and projection on top, bar, then amount and reset time underneath.
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
-                Text(window.label).font(.callout)
+                Text(window.label).font(.body.weight(.semibold))
+                Spacer()
+                if let pace {
+                    Text(pace.headline(display: display, now: now))
+                        .font(.callout)
+                        .foregroundStyle(pace.runsOut ? AnyShapeStyle(Color.orange) : AnyShapeStyle(.secondary))
+                }
+            }
+            UsageBar(used: window.used, display: display, pace: pace)
+            HStack(alignment: .firstTextBaseline) {
+                Text(display == .used ? "\(display.text(window.used)) used" : "\(display.text(window.used)) left")
+                    .monospacedDigit()
+                    .contentTransition(.numericText(value: display.value(window.used)))
                 Spacer()
                 if let resets = window.resetsAt {
                     Text("Resets \(TimeText.reset(resets, now: now, absolute: absoluteResets))")
-                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                Text(display == .used ? display.text(window.used) : "\(display.text(window.used)) left")
-                    .font(.callout.weight(.semibold))
-                    .monospacedDigit()
-                    .contentTransition(.numericText(value: display.value(window.used)))
-                    .frame(minWidth: 40, alignment: .trailing)
             }
-            UsageBar(used: window.used, display: display, pace: pace)
-            if let pace {
-                HStack {
-                    Text(pace.summary)
-                        .foregroundStyle(pace.delta > 0 && !pace.isOnTrack ? AnyShapeStyle(Color.orange) : AnyShapeStyle(.secondary))
-                    Spacer()
-                    Text(pace.forecast(now: now)).foregroundStyle(.secondary)
-                }
-                .font(.caption)
-            }
+            .font(.callout)
             if history.count > 1 {
                 Sparkline(points: history).frame(height: 24)
             }
@@ -287,7 +281,7 @@ struct UsageBar: View {
                 }
             }
         }
-        .frame(height: 6)
+        .frame(height: 8)
         .accessibilityElement()
         .accessibilityValue("\(Int((used * 100).rounded())) percent used")
     }
