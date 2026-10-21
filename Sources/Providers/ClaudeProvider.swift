@@ -66,6 +66,10 @@ struct ClaudeProvider: UsageProvider {
         throw ProviderError.notConfigured("Run `claude` and sign in.")
     }
 
+    var activityFolder: URL {
+        Self.credentialsFile.deletingLastPathComponent().appending(path: "projects")
+    }
+
     func isInstalled() -> Bool {
         Executable.exists("claude") || FileManager.default.fileExists(atPath: Self.credentialsFile.path)
             || Keychain.exists(service: Self.keychainService)

@@ -20,6 +20,10 @@ struct CodexProvider: UsageProvider {
         return dir.appending(path: "auth.json")
     }
 
+    var activityFolder: URL {
+        Self.authFile.deletingLastPathComponent().appending(path: "sessions")
+    }
+
     func isInstalled() -> Bool {
         Executable.exists("codex") || FileManager.default.fileExists(atPath: Self.authFile.path)
     }

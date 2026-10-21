@@ -30,6 +30,7 @@ final class Refresher {
     @ObservationIgnored private let store: StateStore
     @ObservationIgnored private var loop: Task<Void, Never>?
     /// Separate flags: waking usually lands on the lock screen, which must stay paused.
+    @ObservationIgnored private let activity = AgentActivity()
     @ObservationIgnored private var asleep = false
     @ObservationIgnored private var locked = false
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
@@ -48,6 +49,11 @@ final class Refresher {
         Prefs.providerOrder.filter { Prefs.isEnabled($0) && installed.contains($0) }
     }
 
+    private func watchAgents() {
+        guard Prefs.refreshSetting == Prefs.agentAwareInterval else { return }
+        activity.watch(Dictionary(uniqueKeysWithValues: providers.values.map { ($0.id, $0.activityFolder) }))
+    }
+
     /// Re-checked every tick so a CLI installed while Tokei runs shows up within a minute.
     func detectInstalled() {
         let found = Set(providers.values.filter { $0.isInstalled() }.map(\.id))
@@ -59,6 +65,7 @@ final class Refresher {
         loop = Task { [weak self] in
             while !Task.isCancelled {
                 self?.detectInstalled()
+                self?.watchAgents()
                 await self?.refreshDue()
                 try? await Task.sleep(for: .seconds(30), tolerance: .seconds(10))
             }
@@ -83,13 +90,22 @@ final class Refresher {
     func refreshDue(now: Date = .now) async {
         guard !asleep, !locked else { return }
         await withTaskGroup(of: Void.self) { group in
-            for id in enabled where isDue(id, now: now) {
+            for id in enabled where isDue(id, now: now, interval: interval(for: id, now: now)) {
                 group.addTask { await self.refresh(id) }
             }
         }
     }
 
-    func isDue(_ id: ProviderID, now: Date, interval: TimeInterval? = Prefs.refreshInterval) -> Bool {
+    /// nil: no background refresh (Never).
+    func interval(for id: ProviderID, now: Date) -> TimeInterval? {
+        switch Prefs.refreshSetting {
+        case Prefs.agentAwareInterval: AgentActivity.interval(lastActivity: activity.lastActivity[id], now: now)
+        case Prefs.neverInterval: nil
+        default: Prefs.refreshInterval
+        }
+    }
+
+    func isDue(_ id: ProviderID, now: Date, interval: TimeInterval?) -> Bool {
         guard let state = states[id], let last = state.lastAttempt else { return true }
         // "Only when opened": no background refresh after the first fetch.
         guard let interval else { return false }

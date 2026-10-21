@@ -5,6 +5,7 @@ import Testing
 private struct StubProvider: UsageProvider {
     let id: ProviderID
     var installed = true
+    var activityFolder: URL { URL.temporaryDirectory }
     func isInstalled() -> Bool { installed }
     func fetch() async throws -> Snapshot { throw ProviderError.http(500) }
 }
@@ -59,7 +60,7 @@ struct RefresherTests {
     @Test func `due after interval, and after retryAt when failing`() {
         let refresher = makeRefresher()
         let now = Date(timeIntervalSince1970: 1_000_000)
-        #expect(refresher.isDue(.claude, now: now))
+        #expect(refresher.isDue(.claude, now: now, interval: 300))
         refresher.apply(.success(snapshot(used: 0.1, at: now)), to: .claude, now: now)
         #expect(!refresher.isDue(.claude, now: now.addingTimeInterval(299), interval: 300))
         #expect(refresher.isDue(.claude, now: now.addingTimeInterval(300), interval: 300))
@@ -77,6 +78,31 @@ struct RefresherTests {
         #expect(Refresher.backoff(error: error, failures: 20, interval: 300) == 1800)
         #expect(Refresher.backoff(error: ProviderError.rateLimited(retryAfter: nil), failures: 1, interval: 60) == 300)
         #expect(Refresher.backoff(error: ProviderError.rateLimited(retryAfter: 1200), failures: 1, interval: 60) == 1200)
+    }
+}
+
+struct AgentActivityTests {
+    @MainActor
+    @Test func `a write in a watched folder records activity`() async throws {
+        let folder = URL.temporaryDirectory.appending(path: "tokei-activity-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let activity = AgentActivity(latency: 0.1)
+        activity.watch([.claude: folder])
+        try await Task.sleep(for: .milliseconds(300))
+        try Data("x".utf8).write(to: folder.appending(path: "session.jsonl"))
+        for _ in 0 ..< 50 where activity.lastActivity[.claude] == nil {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        #expect(activity.lastActivity[.claude] != nil)
+        #expect(activity.lastActivity[.codex] == nil)
+    }
+
+    @Test func `two minutes while an agent wrote recently, fifteen when idle`() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        #expect(AgentActivity.interval(lastActivity: now.addingTimeInterval(-60), now: now) == 120)
+        #expect(AgentActivity.interval(lastActivity: now.addingTimeInterval(-6 * 60), now: now) == 900)
+        #expect(AgentActivity.interval(lastActivity: nil, now: now) == 900)
     }
 }
 

@@ -24,6 +24,7 @@
 		A731346DE4A709DC83C246F7 /* ClaudeProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AB0FD45491FA3C485858165 /* ClaudeProvider.swift */; };
 		AB93EDFEBAB707819E310C59 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = E82CB690456EFC3AA5DC6636 /* Models.swift */; };
 		B02139C7980CE99615A559CE /* ProviderParsingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C188A44B996D92F148A576A /* ProviderParsingTests.swift */; };
+		C41947D5A96581F0B62F2933 /* AgentActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6216EEFA0838076E7929A1AC /* AgentActivity.swift */; };
 		DF41AFA7B1984D8A3EC282FC /* PanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E349BBE3B651F19D8AC07BD8 /* PanelView.swift */; };
 		EF98BB08A44F710B0A43DE6A /* JWT.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1033648AF590B0C87498D0B /* JWT.swift */; };
 		F69041983B3CE9E8B6993CCB /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 00E03FF902691C591C0EB605 /* AppIcon.icon */; };
@@ -45,6 +46,7 @@
 		0C61C853F2F27EC5ECCE0595 /* Refresher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Refresher.swift; sourceTree = "<group>"; };
 		1C188A44B996D92F148A576A /* ProviderParsingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderParsingTests.swift; sourceTree = "<group>"; };
 		42222E421C5185122D65605C /* Connector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Connector.swift; sourceTree = "<group>"; };
+		6216EEFA0838076E7929A1AC /* AgentActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActivity.swift; sourceTree = "<group>"; };
 		6AB0FD45491FA3C485858165 /* ClaudeProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeProvider.swift; sourceTree = "<group>"; };
 		7663DA1D359EBAA5B88482E7 /* StatusBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarController.swift; sourceTree = "<group>"; };
 		7674EDB32DA50758819C1B3A /* Prefs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Prefs.swift; sourceTree = "<group>"; };
@@ -104,6 +106,7 @@
 		89DC53732392CF05D38BC861 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				6216EEFA0838076E7929A1AC /* AgentActivity.swift */,
 				8B61407B2CFEB93A936F082D /* AppDelegate.swift */,
 				42222E421C5185122D65605C /* Connector.swift */,
 				7674EDB32DA50758819C1B3A /* Prefs.swift */,
@@ -248,6 +251,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C41947D5A96581F0B62F2933 /* AgentActivity.swift in Sources */,
 				0836BFA8E8D56CE0628545BB /* AppDelegate.swift in Sources */,
 				A731346DE4A709DC83C246F7 /* ClaudeProvider.swift in Sources */,
 				FDE6AB73ECD9FEA652B37FA5 /* CodexProvider.swift in Sources */,

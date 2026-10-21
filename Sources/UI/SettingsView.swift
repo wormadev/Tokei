@@ -114,7 +114,7 @@ private struct ProviderSidebarRow: View {
 }
 
 private struct GeneralSettings: View {
-    @AppStorage(Prefs.refreshIntervalKey) private var interval = 300
+    @AppStorage(Prefs.refreshIntervalKey) private var interval = Prefs.agentAwareInterval
     @AppStorage(Prefs.refreshOnOpenKey) private var refreshOnOpen = true
     @AppStorage(Prefs.notifyResetsKey) private var notifyResets = true
     @AppStorage(Prefs.menuBarWeeklyKey) private var menuBarWeekly = false
@@ -123,23 +123,26 @@ private struct GeneralSettings: View {
     @State private var loginError: String?
 
     private var refreshFooter: String {
-        switch (interval < 0, refreshOnOpen) {
-        case (true, true): "Usage updates only when you open the panel (if older than a minute)."
-        case (true, false): "Usage updates only when you press Refresh (⌘R)."
-        case (false, true): "Opening the panel also refreshes anything older than a minute. Background refresh pauses while the Mac sleeps or is locked."
-        case (false, false): "Background refresh pauses while the Mac sleeps or is locked."
+        let background = switch interval {
+        case Prefs.agentAwareInterval: "Every 2 minutes while Claude Code or Codex is working, every 15 minutes when idle."
+        case Prefs.neverInterval: refreshOnOpen ? "Usage updates only when you open the panel (if older than a minute)." : "Usage updates only when you press Refresh (⌘R)."
+        default: refreshOnOpen ? "Opening the panel also refreshes anything older than a minute." : ""
         }
+        return [background, interval == Prefs.neverInterval ? "" : "Pauses while the Mac sleeps or is locked."]
+            .filter { !$0.isEmpty }.joined(separator: " ")
     }
 
     var body: some View {
         Form {
             Section {
                 Picker("Refresh in background", selection: $interval) {
+                    Text("Agent aware").tag(Prefs.agentAwareInterval)
+                    Divider()
                     ForEach([60, 120, 300, 600, 900, 1800], id: \.self) { Text("Every \($0 / 60) min").tag($0) }
                     Divider()
                     ForEach([3600, 7200, 14400], id: \.self) { Text("Every \($0 / 3600) h").tag($0) }
                     Divider()
-                    Text("Never").tag(-1)
+                    Text("Never").tag(Prefs.neverInterval)
                 }
                 Toggle("Refresh when opening the panel", isOn: $refreshOnOpen)
             } footer: {

@@ -20,7 +20,7 @@ enum Prefs {
 
     static func registerDefaults() {
         var defaults: [String: Any] = [
-            refreshIntervalKey: 300,
+            refreshIntervalKey: agentAwareInterval,
             refreshOnOpenKey: true,
             usageDisplayKey: UsageDisplay.used.rawValue,
             menuBarWeeklyKey: false,
@@ -37,9 +37,17 @@ enum Prefs {
         UserDefaults.standard.register(defaults: defaults)
     }
 
-    /// Seconds between background refreshes; nil for "Only when opened" (stored as -1).
+    /// Stored refresh setting: seconds, `neverInterval` or `agentAwareInterval`.
+    static let neverInterval = -1
+    static let agentAwareInterval = -2
+
+    static var refreshSetting: Int {
+        UserDefaults.standard.object(forKey: refreshIntervalKey) as? Int ?? agentAwareInterval
+    }
+
+    /// Fixed seconds between background refreshes; nil for Never and Agent aware.
     static var refreshInterval: TimeInterval? {
-        let raw = UserDefaults.standard.integer(forKey: refreshIntervalKey)
+        let raw = refreshSetting
         if raw < 0 { return nil }
         return raw == 0 ? 300 : TimeInterval(max(60, raw))
     }
