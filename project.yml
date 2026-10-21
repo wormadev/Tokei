@@ -14,8 +14,6 @@ targets:
     type: application
     platform: macOS
     sources: [Sources]
-    dependencies:
-      - sdk: libsqlite3.tbd
     scheme:
       testTargets: [TokeiTests]
     info:

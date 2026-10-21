@@ -23,7 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Prefs.registerDefaults()
         Prefs.detectProvidersOnce()
         refresher = Refresher(providers: [
-            ClaudeProvider(), CodexProvider(), CursorProvider(), GeminiProvider(), CopilotProvider(),
+            ClaudeProvider(), CodexProvider(),
         ])
         connector = Connector(refresher: refresher)
         statusBar = StatusBarController(refresher: refresher, connector: connector, openSettings: { [weak self] in self?.settings.show() })

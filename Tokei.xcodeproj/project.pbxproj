@@ -10,10 +10,8 @@
 		0836BFA8E8D56CE0628545BB /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B61407B2CFEB93A936F082D /* AppDelegate.swift */; };
 		27958737654CEB15BC805AFD /* Sparkline.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6DEABF64020329A8AFDC03E /* Sparkline.swift */; };
 		2E512E31B66DFF82C4460EF1 /* Design.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D262AABFE36BC635BFC03E7 /* Design.swift */; };
-		2EEBA56A77BACD32F0827745 /* CursorProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E300A99A96D6B84A65C8FA5 /* CursorProvider.swift */; };
 		343C1813725E920C90EBA573 /* Refresher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C61C853F2F27EC5ECCE0595 /* Refresher.swift */; };
 		3CDE0534E77981C93CE5A2CC /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78C8F98A6E779DA6DD75C52F /* SettingsView.swift */; };
-		4B52FE114FE90F1912951197 /* GeminiProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95143164FDFBCA706F2CC4D8 /* GeminiProvider.swift */; };
 		5075099FD0BC32B469D5D11A /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = E31A5B3C2101D318218CB0EB /* Keychain.swift */; };
 		5343E1F936712730FFA3E7B5 /* StatusBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7663DA1D359EBAA5B88482E7 /* StatusBarController.swift */; };
 		7701078D98BEF1C72B543FB4 /* HTTP.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF540167562E6D9F84E6B4D /* HTTP.swift */; };
@@ -23,8 +21,6 @@
 		A731346DE4A709DC83C246F7 /* ClaudeProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AB0FD45491FA3C485858165 /* ClaudeProvider.swift */; };
 		AB93EDFEBAB707819E310C59 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = E82CB690456EFC3AA5DC6636 /* Models.swift */; };
 		B02139C7980CE99615A559CE /* ProviderParsingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C188A44B996D92F148A576A /* ProviderParsingTests.swift */; };
-		B69EB8A8564BCE9BB9C08A1B /* CopilotProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9515ABB654CDAB163EA66AAB /* CopilotProvider.swift */; };
-		D24BCFF52CF1B89910BCB222 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = B346FBBA5813805EBFB9F9DD /* libsqlite3.tbd */; };
 		DF41AFA7B1984D8A3EC282FC /* PanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E349BBE3B651F19D8AC07BD8 /* PanelView.swift */; };
 		EF98BB08A44F710B0A43DE6A /* JWT.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1033648AF590B0C87498D0B /* JWT.swift */; };
 		F69041983B3CE9E8B6993CCB /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 00E03FF902691C591C0EB605 /* AppIcon.icon */; };
@@ -45,7 +41,6 @@
 		00E03FF902691C591C0EB605 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		0C61C853F2F27EC5ECCE0595 /* Refresher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Refresher.swift; sourceTree = "<group>"; };
 		1C188A44B996D92F148A576A /* ProviderParsingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderParsingTests.swift; sourceTree = "<group>"; };
-		1E300A99A96D6B84A65C8FA5 /* CursorProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorProvider.swift; sourceTree = "<group>"; };
 		42222E421C5185122D65605C /* Connector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Connector.swift; sourceTree = "<group>"; };
 		6AB0FD45491FA3C485858165 /* ClaudeProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeProvider.swift; sourceTree = "<group>"; };
 		7663DA1D359EBAA5B88482E7 /* StatusBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarController.swift; sourceTree = "<group>"; };
@@ -54,12 +49,9 @@
 		7D262AABFE36BC635BFC03E7 /* Design.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design.swift; sourceTree = "<group>"; };
 		87F0009791D0875DB4BFE60C /* CodexProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexProvider.swift; sourceTree = "<group>"; };
 		8B61407B2CFEB93A936F082D /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-		95143164FDFBCA706F2CC4D8 /* GeminiProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiProvider.swift; sourceTree = "<group>"; };
-		9515ABB654CDAB163EA66AAB /* CopilotProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotProvider.swift; sourceTree = "<group>"; };
 		9FC10BBA76DF653345CC43C5 /* Tokei.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tokei.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		ABF540167562E6D9F84E6B4D /* HTTP.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTP.swift; sourceTree = "<group>"; };
 		AFECC1E5F96727B7B7269205 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		B346FBBA5813805EBFB9F9DD /* libsqlite3.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libsqlite3.tbd; path = usr/lib/libsqlite3.tbd; sourceTree = SDKROOT; };
 		D5A1CFE3728E18372EA5ED7B /* RefresherTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RefresherTests.swift; sourceTree = "<group>"; };
 		D6DEABF64020329A8AFDC03E /* Sparkline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sparkline.swift; sourceTree = "<group>"; };
 		E31A5B3C2101D318218CB0EB /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
@@ -69,24 +61,12 @@
 		FF223BF47B6D7592C9FBBE27 /* TokeiTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TokeiTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
-/* Begin PBXFrameworksBuildPhase section */
-		33663360D6217B2AF3343B45 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				D24BCFF52CF1B89910BCB222 /* libsqlite3.tbd in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXFrameworksBuildPhase section */
-
 /* Begin PBXGroup section */
 		27968BB2479A394357974DC3 = {
 			isa = PBXGroup;
 			children = (
 				C96E79564F2D1F18FD9CD447 /* Sources */,
 				9DA13D5F9351C5A3A8BD8551 /* Tests */,
-				AFD4AAD6A5EBDE0D029D822B /* Frameworks */,
 				E31D5F2F30A83A717A2923E8 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -134,14 +114,6 @@
 			path = Tests;
 			sourceTree = "<group>";
 		};
-		AFD4AAD6A5EBDE0D029D822B /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-				B346FBBA5813805EBFB9F9DD /* libsqlite3.tbd */,
-			);
-			name = Frameworks;
-			sourceTree = "<group>";
-		};
 		C96E79564F2D1F18FD9CD447 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
@@ -160,9 +132,6 @@
 			children = (
 				6AB0FD45491FA3C485858165 /* ClaudeProvider.swift */,
 				87F0009791D0875DB4BFE60C /* CodexProvider.swift */,
-				9515ABB654CDAB163EA66AAB /* CopilotProvider.swift */,
-				1E300A99A96D6B84A65C8FA5 /* CursorProvider.swift */,
-				95143164FDFBCA706F2CC4D8 /* GeminiProvider.swift */,
 			);
 			path = Providers;
 			sourceTree = "<group>";
@@ -185,7 +154,6 @@
 			buildPhases = (
 				0CC98C02E0727464540292F5 /* Sources */,
 				E497D32DC066A39B4FEFBC29 /* Resources */,
-				33663360D6217B2AF3343B45 /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -275,10 +243,7 @@
 				A731346DE4A709DC83C246F7 /* ClaudeProvider.swift in Sources */,
 				FDE6AB73ECD9FEA652B37FA5 /* CodexProvider.swift in Sources */,
 				7EBBA026BAF745B70EFEF86D /* Connector.swift in Sources */,
-				B69EB8A8564BCE9BB9C08A1B /* CopilotProvider.swift in Sources */,
-				2EEBA56A77BACD32F0827745 /* CursorProvider.swift in Sources */,
 				2E512E31B66DFF82C4460EF1 /* Design.swift in Sources */,
-				4B52FE114FE90F1912951197 /* GeminiProvider.swift in Sources */,
 				7701078D98BEF1C72B543FB4 /* HTTP.swift in Sources */,
 				EF98BB08A44F710B0A43DE6A /* JWT.swift in Sources */,
 				5075099FD0BC32B469D5D11A /* Keychain.swift in Sources */,

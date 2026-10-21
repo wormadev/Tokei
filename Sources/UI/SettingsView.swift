@@ -270,20 +270,6 @@ private struct ProviderPage: View {
             caption("Reads Claude Code's sign-in from the Keychain. Connect from the Tokei panel.")
         case .codex:
             caption("Reads \(CodexProvider.authFile.path(percentEncoded: false)) from the Codex CLI.")
-        case .cursor:
-            caption("Reads Cursor's local sign-in. Keep the Cursor app signed in.")
-        case .gemini:
-            caption("Reads ~/.gemini/oauth_creds.json from the Gemini CLI. Google ended CLI quotas for some personal plans in June 2026.")
-        case .copilot:
-            if connector.copilotSignedIn {
-                HStack {
-                    caption("Signed in with GitHub.")
-                    Spacer()
-                    Button("Sign Out", action: connector.signOutCopilot)
-                }
-            } else {
-                caption("Sign in with GitHub from the Tokei panel.")
-            }
         }
     }
 

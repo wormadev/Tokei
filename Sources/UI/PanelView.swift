@@ -124,14 +124,7 @@ struct ProviderCard: View {
                     .lineLimit(2)
                     .textSelection(.enabled)
             }
-            if id == .copilot, let code = connector.copilotCode {
-                HStack(spacing: 8) {
-                    Text("Enter **\(code)** on GitHub (copied)").font(.caption)
-                    Spacer()
-                    ProgressView().controlSize(.small)
-                    Button("Cancel", action: connector.cancelCopilot).controlSize(.small)
-                }
-            } else if state.needsConnect == true, let title = connector.actionTitle(id) {
+            if state.needsConnect == true, let title = connector.actionTitle(id) {
                 Button(title) { connector.connect(id) }
                     .controlSize(.small)
             }

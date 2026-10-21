@@ -3,7 +3,7 @@ import Foundation
 /// CodingKeyRepresentable: persisted dictionaries use readable string keys. Removing a case
 /// later still fails decoding of saved state (it is then rebuilt by the next refresh).
 enum ProviderID: String, CaseIterable, Codable, CodingKeyRepresentable, Identifiable, Sendable {
-    case claude, codex, cursor, gemini, copilot
+    case claude, codex
 
     var id: String { rawValue }
 
@@ -11,9 +11,6 @@ enum ProviderID: String, CaseIterable, Codable, CodingKeyRepresentable, Identifi
         switch self {
         case .claude: "Claude"
         case .codex: "Codex"
-        case .cursor: "Cursor"
-        case .gemini: "Gemini"
-        case .copilot: "Copilot"
         }
     }
 }
