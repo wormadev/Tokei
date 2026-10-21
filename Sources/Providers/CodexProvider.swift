@@ -32,7 +32,7 @@ struct CodexProvider: UsageProvider {
         var headers = [
             "Authorization": "Bearer \(tokens.access_token)",
             "Accept": "application/json",
-            "User-Agent": "Quota",
+            "User-Agent": "Tokei",
         ]
         if let account = tokens.account_id { headers["ChatGPT-Account-Id"] = account }
         let usage = try await HTTP.json(

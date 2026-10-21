@@ -15,10 +15,10 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "A5F2AFCE12D402FCFE6DA6F8"
-               BuildableName = "Quota.app"
-               BlueprintName = "Quota"
-               ReferencedContainer = "container:Quota.xcodeproj">
+               BlueprintIdentifier = "18FA2CC0FEE3F64346C04702"
+               BuildableName = "Tokei.app"
+               BlueprintName = "Tokei"
+               ReferencedContainer = "container:Tokei.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -32,10 +32,10 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "A5F2AFCE12D402FCFE6DA6F8"
-            BuildableName = "Quota.app"
-            BlueprintName = "Quota"
-            ReferencedContainer = "container:Quota.xcodeproj">
+            BlueprintIdentifier = "18FA2CC0FEE3F64346C04702"
+            BuildableName = "Tokei.app"
+            BlueprintName = "Tokei"
+            ReferencedContainer = "container:Tokei.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
       <Testables>
@@ -44,10 +44,10 @@
             parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "DE8813C5C3935C4EBAEF9EEB"
-               BuildableName = "QuotaTests.xctest"
-               BlueprintName = "QuotaTests"
-               ReferencedContainer = "container:Quota.xcodeproj">
+               BlueprintIdentifier = "202D46BDA08DFCF172DAC60B"
+               BuildableName = "TokeiTests.xctest"
+               BlueprintName = "TokeiTests"
+               ReferencedContainer = "container:Tokei.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -68,10 +68,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "A5F2AFCE12D402FCFE6DA6F8"
-            BuildableName = "Quota.app"
-            BlueprintName = "Quota"
-            ReferencedContainer = "container:Quota.xcodeproj">
+            BlueprintIdentifier = "18FA2CC0FEE3F64346C04702"
+            BuildableName = "Tokei.app"
+            BlueprintName = "Tokei"
+            ReferencedContainer = "container:Tokei.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <CommandLineArguments>
@@ -87,10 +87,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "A5F2AFCE12D402FCFE6DA6F8"
-            BuildableName = "Quota.app"
-            BlueprintName = "Quota"
-            ReferencedContainer = "container:Quota.xcodeproj">
+            BlueprintIdentifier = "18FA2CC0FEE3F64346C04702"
+            BuildableName = "Tokei.app"
+            BlueprintName = "Tokei"
+            ReferencedContainer = "container:Tokei.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <CommandLineArguments>

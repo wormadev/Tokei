@@ -205,7 +205,7 @@ struct StateStore {
         var history: History
     }
 
-    var url: URL = URL.applicationSupportDirectory.appending(path: "Quota/state.json")
+    var url: URL = URL.applicationSupportDirectory.appending(path: "Tokei/state.json")
 
     func load() -> Saved? {
         (try? Data(contentsOf: url)).flatMap { try? JSONDecoder().decode(Saved.self, from: $0) }

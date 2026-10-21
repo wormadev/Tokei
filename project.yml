@@ -1,4 +1,4 @@
-name: Quota
+name: Tokei
 options:
   bundleIdPrefix: com.wormadev
   deploymentTarget:
@@ -10,34 +10,34 @@ settings:
     CODE_SIGN_STYLE: Automatic
     ENABLE_HARDENED_RUNTIME: YES
 targets:
-  Quota:
+  Tokei:
     type: application
     platform: macOS
     sources: [Sources]
     dependencies:
       - sdk: libsqlite3.tbd
     scheme:
-      testTargets: [QuotaTests]
+      testTargets: [TokeiTests]
     info:
       path: Sources/Info.plist
       properties:
-        CFBundleDisplayName: Quota
+        CFBundleDisplayName: Tokei
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.wormadev.Quota
+        PRODUCT_BUNDLE_IDENTIFIER: com.wormadev.Tokei
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
-  QuotaTests:
+  TokeiTests:
     type: bundle.unit-test
     platform: macOS
     sources: [Tests]
     dependencies:
-      - target: Quota
+      - target: Tokei
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.wormadev.QuotaTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.wormadev.TokeiTests

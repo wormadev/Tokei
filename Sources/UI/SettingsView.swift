@@ -15,7 +15,7 @@ final class SettingsWindowController {
     func show() {
         if window == nil {
             let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView(refresher: refresher, connector: connector)))
-            window.title = "Quota Settings"
+            window.title = "Tokei Settings"
             // Full-size content lets the glass sidebar run under the titlebar, like System Settings.
             window.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
             window.titlebarAppearsTransparent = true
@@ -191,7 +191,7 @@ private struct DisplaySettings: View {
                 toggle("Per-model limits", isOn: $showModelLimits, available: snapshots.contains { $0.windows.contains { $0.kind == .secondary } },
                        note: "None of your providers report per-model limits right now.")
                 toggle("Usage history (7 days)", isOn: $showHistory, available: historyReady,
-                       note: "Builds up as Quota runs: one point per limit every 15 minutes.")
+                       note: "Builds up as Tokei runs: one point per limit every 15 minutes.")
             }
             Section {
                 Toggle("Show reset as clock time", isOn: $absoluteResets)
@@ -267,7 +267,7 @@ private struct ProviderPage: View {
     private var source: some View {
         switch id {
         case .claude:
-            caption("Reads Claude Code's sign-in from the Keychain. Connect from the Quota panel.")
+            caption("Reads Claude Code's sign-in from the Keychain. Connect from the Tokei panel.")
         case .codex:
             caption("Reads \(CodexProvider.authFile.path(percentEncoded: false)) from the Codex CLI.")
         case .cursor:
@@ -282,7 +282,7 @@ private struct ProviderPage: View {
                     Button("Sign Out", action: connector.signOutCopilot)
                 }
             } else {
-                caption("Sign in with GitHub from the Quota panel.")
+                caption("Sign in with GitHub from the Tokei panel.")
             }
         }
     }
