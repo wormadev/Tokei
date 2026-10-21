@@ -102,12 +102,11 @@ final class StatusBarController: NSObject {
     }
 
     /// Session above weekly, like the inner ring sits inside the outer one. Unknown values
-    /// are left out; labels only when both show.
+    /// are left out.
     nonisolated static func menuLines(_ rings: Rings, weekly: Bool, session: Bool, display: UsageDisplay) -> [String] {
-        let both = weekly && session
-        return [
-            session ? rings.session.map { (both ? "5h " : "") + display.text($0) } : nil,
-            weekly ? rings.weekly.map { (both ? "W " : "") + display.text($0) } : nil,
+        [
+            session ? rings.session.map(display.text) : nil,
+            weekly ? rings.weekly.map(display.text) : nil,
         ].compactMap(\.self)
     }
 

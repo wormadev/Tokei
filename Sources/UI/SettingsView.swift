@@ -162,7 +162,7 @@ private struct GeneralSettings: View {
             } header: {
                 Text("Menu bar numbers")
             } footer: {
-                Text("From the first provider in your list, next to its rings (outer weekly, inner session). With both on they stack.")
+                Text("From the first provider in your list, next to its rings. With both on they stack: session on top, weekly below.")
             }
             Section {
                 Toggle("Launch at login", isOn: $launchAtLogin)
