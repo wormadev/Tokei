@@ -4,6 +4,8 @@ import Testing
 
 private struct StubProvider: UsageProvider {
     let id: ProviderID
+    var installed = true
+    func isInstalled() -> Bool { installed }
     func fetch() async throws -> Snapshot { throw ProviderError.http(500) }
 }
 
@@ -45,6 +47,13 @@ struct RefresherTests {
 
         refresher.clear(.claude)
         #expect(refresher.states[.claude] == nil)
+    }
+
+    @Test func `providers that are not installed are left out of the panel`() {
+        let store = StateStore(url: URL.temporaryDirectory.appending(path: "tokei-test-\(UUID().uuidString).json"))
+        let refresher = Refresher(providers: [StubProvider(id: .claude), StubProvider(id: .codex, installed: false)], store: store)
+        #expect(refresher.installed == [.claude])
+        #expect(!refresher.enabled.contains(.codex))
     }
 
     @Test func `due after interval, and after retryAt when failing`() {

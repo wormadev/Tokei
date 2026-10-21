@@ -71,6 +71,8 @@ enum ProviderError: Error, Equatable, LocalizedError {
 
 protocol UsageProvider: Sendable {
     var id: ProviderID { get }
+    /// CLI present or sign-in found. Cheap file checks only: runs every refresh tick.
+    func isInstalled() -> Bool
     func fetch() async throws -> Snapshot
 }
 

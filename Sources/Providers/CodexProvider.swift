@@ -20,6 +20,10 @@ struct CodexProvider: UsageProvider {
         return dir.appending(path: "auth.json")
     }
 
+    func isInstalled() -> Bool {
+        Executable.exists("codex") || FileManager.default.fileExists(atPath: Self.authFile.path)
+    }
+
     func fetch() async throws -> Snapshot {
         guard let data = try? Data(contentsOf: Self.authFile),
               let tokens = (try? JSONDecoder().decode(Auth.self, from: data))?.tokens
