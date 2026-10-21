@@ -1,5 +1,5 @@
 import Foundation
-@testable import Quota
+@testable import Tokei
 import Testing
 
 private func decode<T: Decodable>(_ type: T.Type, _ json: String) throws -> T {

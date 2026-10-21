@@ -1,3 +1,5 @@
 build/
 *.xcodeproj/xcuserdata/
 .DS_Store
+# Icon exploration batches; the chosen one lives in Sources/AppIcon.icon
+Design/icon-candidates*/

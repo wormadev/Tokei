@@ -40,7 +40,7 @@ struct PanelView: View {
 
     private var header: some View {
         HStack(spacing: 4) {
-            Text("Quota").font(.headline)
+            Text("Tokei").font(.headline)
             Spacer()
             Button(action: refresher.refreshAll) {
                 Image(systemName: "arrow.clockwise")
@@ -52,7 +52,7 @@ struct PanelView: View {
             Menu {
                 Button("Settings…", action: openSettings).keyboardShortcut(",")
                 Divider()
-                Button("Quit Quota") { NSApp.terminate(nil) }.keyboardShortcut("q")
+                Button("Quit Tokei") { NSApp.terminate(nil) }.keyboardShortcut("q")
             } label: {
                 Image(systemName: "gearshape").frame(width: 24, height: 24)
             }

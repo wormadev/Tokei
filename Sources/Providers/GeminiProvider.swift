@@ -58,7 +58,7 @@ struct GeminiProvider: UsageProvider {
             throw ProviderError.unauthorized("Run `gemini` and sign in again.")
         }
         guard let client = GeminiClientSecret.find() else {
-            throw ProviderError.notConfigured("Install gemini-cli (it holds the OAuth client Quota needs to refresh).")
+            throw ProviderError.notConfigured("Install gemini-cli (it holds the OAuth client Tokei needs to refresh).")
         }
         var request = URLRequest("https://oauth2.googleapis.com/token", method: "POST", headers: ["Content-Type": "application/x-www-form-urlencoded"])
         var form = URLComponents()
@@ -95,7 +95,7 @@ struct GeminiProvider: UsageProvider {
         guard current?["refresh_token"] as? String == refreshToken,
               let data = try? JSONSerialization.data(withJSONObject: creds, options: [.prettyPrinted])
         else { return }
-        let temp = credsFile.deletingLastPathComponent().appending(path: ".oauth_creds.quota-\(UUID().uuidString)")
+        let temp = credsFile.deletingLastPathComponent().appending(path: ".oauth_creds.tokei-\(UUID().uuidString)")
         guard FileManager.default.createFile(atPath: temp.path, contents: data, attributes: [.posixPermissions: 0o600]) else { return }
         if (try? FileManager.default.replaceItemAt(credsFile, withItemAt: temp)) == nil {
             try? FileManager.default.removeItem(at: temp)

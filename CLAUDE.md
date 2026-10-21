@@ -1,12 +1,12 @@
-# Quota
+# Tokei
 
 Menu bar AI plan usage (Claude, Codex, Cursor, Gemini, Copilot) for macOS 26+, Liquid Glass UI. See SPEC.md.
 
 ## Build
 
 - `xcodegen generate` after adding/removing files (project.yml is the source of truth; .xcodeproj is generated)
-- `xcodebuild -project Quota.xcodeproj -scheme Quota -configuration Debug -derivedDataPath build build`
-- Tests: `xcodebuild -project Quota.xcodeproj -scheme Quota -derivedDataPath build test`
+- `xcodebuild -project Tokei.xcodeproj -scheme Tokei -configuration Debug -derivedDataPath build build`
+- Tests: `xcodebuild -project Tokei.xcodeproj -scheme Tokei -derivedDataPath build test`
 
 ## Design system
 
