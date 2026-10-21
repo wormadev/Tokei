@@ -65,7 +65,7 @@ struct PanelView: View {
 
     private var empty: some View {
         VStack(spacing: 8) {
-            Text("No providers enabled").font(.callout)
+            Text(refresher.installed.isEmpty ? "Install Claude Code or Codex to see usage" : "No providers enabled").font(.callout)
             Button("Open Settings", action: openSettings)
         }
         .frame(maxWidth: .infinity)

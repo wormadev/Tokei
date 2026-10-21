@@ -46,7 +46,7 @@ struct SettingsView: View {
                 Label("Display", systemImage: "eye").tag("display")
                 Section("Providers") {
                     ForEach(order) { id in
-                        ProviderSidebarRow(id: id, state: refresher.states[id]).tag(id.rawValue)
+                        ProviderSidebarRow(id: id, state: refresher.states[id], installed: refresher.installed.contains(id)).tag(id.rawValue)
                     }
                     .onMove { from, to in
                         order.move(fromOffsets: from, toOffset: to)
@@ -79,29 +79,32 @@ struct SettingsView: View {
             if let id = ProviderID(rawValue: page) {
                 ProviderPage(id: id, refresher: refresher, connector: connector).id(id)
             } else {
-                GeneralSettings()
+                GeneralSettings(installed: refresher.installed)
             }
         }
     }
 }
 
 /// Name plus a status dot: green working, orange needs attention, none when off.
+/// Not installed: grayed out.
 private struct ProviderSidebarRow: View {
     let id: ProviderID
     let state: ProviderState?
+    let installed: Bool
     @AppStorage private var enabled: Bool
 
-    init(id: ProviderID, state: ProviderState?) {
+    init(id: ProviderID, state: ProviderState?, installed: Bool) {
         self.id = id
         self.state = state
+        self.installed = installed
         _enabled = AppStorage(wrappedValue: true, Prefs.enabledKey(id))
     }
 
     var body: some View {
         HStack {
-            Text(id.name).foregroundStyle(enabled ? .primary : .secondary)
+            Text(id.name).foregroundStyle(!installed ? .tertiary : enabled ? .primary : .secondary)
             Spacer()
-            if enabled {
+            if installed, enabled {
                 Circle()
                     .fill(state?.error == nil && state?.snapshot != nil ? Color.green : Color.orange)
                     .frame(width: 6, height: 6)
@@ -111,11 +114,20 @@ private struct ProviderSidebarRow: View {
 }
 
 private struct GeneralSettings: View {
+    let installed: Set<ProviderID>
     @AppStorage(Prefs.refreshIntervalKey) private var interval = 300
     @AppStorage(Prefs.refreshOnOpenKey) private var refreshOnOpen = true
     @AppStorage(Prefs.menuBarStyleKey) private var menuBarStyle = MenuBarStyle.highest.rawValue
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
+
+    /// Providers that aren't installed can't feed the menu bar.
+    private var menuBarStyles: [MenuBarStyle] {
+        MenuBarStyle.all.filter { style in
+            if case let .provider(id) = style { return installed.contains(id) }
+            return true
+        }
+    }
 
     private var refreshFooter: String {
         switch (interval < 0, refreshOnOpen) {
@@ -142,7 +154,7 @@ private struct GeneralSettings: View {
             }
             Section {
                 Picker("Menu bar", selection: $menuBarStyle) {
-                    ForEach(MenuBarStyle.all) { style in
+                    ForEach(menuBarStyles) { style in
                         Text(style.label).tag(style.rawValue)
                         if style == .highest { Divider() }
                     }
@@ -226,17 +238,27 @@ private struct ProviderPage: View {
         _enabled = AppStorage(wrappedValue: true, Prefs.enabledKey(id))
     }
 
+    private var installed: Bool { refresher.installed.contains(id) }
+
     var body: some View {
         Form {
+            if !installed {
+                Section {
+                    Label("Not installed on this Mac", systemImage: "xmark.circle").foregroundStyle(.secondary)
+                } footer: {
+                    Text(LocalizedStringKey(installHint))
+                }
+            }
             Section {
                 Toggle("Show in panel", isOn: $enabled)
+                    .disabled(!installed)
                     .onChange(of: enabled) { _, on in
                         if on { Task { await refresher.refresh(id) } }
                     }
             } footer: {
                 Text("Drag providers in the sidebar to change their order in the panel.")
             }
-            if enabled {
+            if installed, enabled {
                 Section("Status") {
                     status
                     if let plan = refresher.states[id]?.snapshot?.account.plan {
@@ -247,6 +269,13 @@ private struct ProviderPage: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private var installHint: String {
+        switch id {
+        case .claude: "Install Claude Code and sign in with `claude`. Tokei picks it up within a minute."
+        case .codex: "Install the Codex CLI (`brew install --cask codex`) and run `codex login`. Tokei picks it up within a minute."
+        }
     }
 
     @ViewBuilder

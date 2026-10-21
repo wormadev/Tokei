@@ -9,7 +9,6 @@ enum Prefs {
     static let showModelLimitsKey = "show.modelLimits"
     static let showHistoryKey = "show.history"
     static let absoluteResetsKey = "show.absoluteResets"
-    static let didDetectKey = "didDetectProviders"
     static let providerOrderKey = "providerOrder"
     static let refreshOnOpenKey = "refreshOnOpen"
 
@@ -53,20 +52,6 @@ enum Prefs {
 
     static func isEnabled(_ id: ProviderID) -> Bool {
         UserDefaults.standard.bool(forKey: enabledKey(id))
-    }
-
-    /// First launch: enable only providers whose credentials exist, so the panel isn't a wall of
-    /// "not set up" rows. Presence checks only; nothing here reads a secret or prompts.
-    static func detectProvidersOnce() {
-        let defaults = UserDefaults.standard
-        guard !defaults.bool(forKey: didDetectKey) else { return }
-        let fm = FileManager.default
-        let found: [ProviderID: Bool] = [
-            .claude: fm.fileExists(atPath: ClaudeProvider.credentialsFile.path) || Keychain.exists(service: ClaudeProvider.keychainService),
-            .codex: fm.fileExists(atPath: CodexProvider.authFile.path),
-        ]
-        for (id, present) in found { defaults.set(present, forKey: enabledKey(id)) }
-        defaults.set(true, forKey: didDetectKey)
     }
 }
 

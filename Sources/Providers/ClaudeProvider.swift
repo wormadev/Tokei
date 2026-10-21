@@ -66,6 +66,11 @@ struct ClaudeProvider: UsageProvider {
         throw ProviderError.notConfigured("Run `claude` and sign in.")
     }
 
+    func isInstalled() -> Bool {
+        Executable.exists("claude") || FileManager.default.fileExists(atPath: Self.credentialsFile.path)
+            || Keychain.exists(service: Self.keychainService)
+    }
+
     func fetch() async throws -> Snapshot {
         let credentials = try Self.resolveCredentials()
         guard let oauth = credentials.claudeAiOauth else { throw ProviderError.notConfigured("Run `claude` and sign in.") }

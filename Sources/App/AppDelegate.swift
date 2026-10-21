@@ -21,7 +21,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Unit tests use the app as host: no status item, no live fetches, no Keychain.
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return }
         Prefs.registerDefaults()
-        Prefs.detectProvidersOnce()
         refresher = Refresher(providers: [
             ClaudeProvider(), CodexProvider(),
         ])

@@ -21,6 +21,8 @@ struct ProviderState: Codable, Equatable {
 final class Refresher {
     private(set) var states: [ProviderID: ProviderState] = [:]
     private(set) var refreshing: Set<ProviderID> = []
+    /// Providers whose CLI or sign-in exists on this Mac. Others are hidden from the panel.
+    private(set) var installed: Set<ProviderID> = []
     private(set) var history = History()
 
     @ObservationIgnored private let providers: [ProviderID: any UsageProvider]
@@ -38,16 +40,24 @@ final class Refresher {
             states = saved.states
             history = saved.history
         }
+        detectInstalled()
     }
 
     var enabled: [ProviderID] {
-        Prefs.providerOrder.filter { Prefs.isEnabled($0) && providers[$0] != nil }
+        Prefs.providerOrder.filter { Prefs.isEnabled($0) && installed.contains($0) }
+    }
+
+    /// Re-checked every tick so a CLI installed while Tokei runs shows up within a minute.
+    func detectInstalled() {
+        let found = Set(providers.values.filter { $0.isInstalled() }.map(\.id))
+        if found != installed { installed = found }
     }
 
     func start() {
         observeSystem()
         loop = Task { [weak self] in
             while !Task.isCancelled {
+                self?.detectInstalled()
                 await self?.refreshDue()
                 try? await Task.sleep(for: .seconds(30), tolerance: .seconds(10))
             }
@@ -61,6 +71,7 @@ final class Refresher {
 
     /// Panel opened: anything older than a minute is worth a quiet refresh.
     func refreshStale(maxAge: TimeInterval = 60) {
+        detectInstalled()
         let now = Date.now
         for id in enabled where (states[id]?.lastAttempt).map({ now.timeIntervalSince($0) > maxAge }) ?? true {
             if let retryAt = states[id]?.retryAt, retryAt > now { continue }

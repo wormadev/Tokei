@@ -11,6 +11,7 @@
 		27958737654CEB15BC805AFD /* Sparkline.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6DEABF64020329A8AFDC03E /* Sparkline.swift */; };
 		2E512E31B66DFF82C4460EF1 /* Design.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D262AABFE36BC635BFC03E7 /* Design.swift */; };
 		343C1813725E920C90EBA573 /* Refresher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C61C853F2F27EC5ECCE0595 /* Refresher.swift */; };
+		346114937A3B201BB7DC11E0 /* Executable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95B8EF40C67EF3FECA5B3CE6 /* Executable.swift */; };
 		3CDE0534E77981C93CE5A2CC /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78C8F98A6E779DA6DD75C52F /* SettingsView.swift */; };
 		5075099FD0BC32B469D5D11A /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = E31A5B3C2101D318218CB0EB /* Keychain.swift */; };
 		5343E1F936712730FFA3E7B5 /* StatusBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7663DA1D359EBAA5B88482E7 /* StatusBarController.swift */; };
@@ -49,6 +50,7 @@
 		7D262AABFE36BC635BFC03E7 /* Design.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design.swift; sourceTree = "<group>"; };
 		87F0009791D0875DB4BFE60C /* CodexProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexProvider.swift; sourceTree = "<group>"; };
 		8B61407B2CFEB93A936F082D /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		95B8EF40C67EF3FECA5B3CE6 /* Executable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Executable.swift; sourceTree = "<group>"; };
 		9FC10BBA76DF653345CC43C5 /* Tokei.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tokei.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		ABF540167562E6D9F84E6B4D /* HTTP.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTP.swift; sourceTree = "<group>"; };
 		AFECC1E5F96727B7B7269205 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -74,6 +76,7 @@
 		28B04BC73476009B9DF9A197 /* Core */ = {
 			isa = PBXGroup;
 			children = (
+				95B8EF40C67EF3FECA5B3CE6 /* Executable.swift */,
 				ABF540167562E6D9F84E6B4D /* HTTP.swift */,
 				F1033648AF590B0C87498D0B /* JWT.swift */,
 				E31A5B3C2101D318218CB0EB /* Keychain.swift */,
@@ -244,6 +247,7 @@
 				FDE6AB73ECD9FEA652B37FA5 /* CodexProvider.swift in Sources */,
 				7EBBA026BAF745B70EFEF86D /* Connector.swift in Sources */,
 				2E512E31B66DFF82C4460EF1 /* Design.swift in Sources */,
+				346114937A3B201BB7DC11E0 /* Executable.swift in Sources */,
 				7701078D98BEF1C72B543FB4 /* HTTP.swift in Sources */,
 				EF98BB08A44F710B0A43DE6A /* JWT.swift in Sources */,
 				5075099FD0BC32B469D5D11A /* Keychain.swift in Sources */,
