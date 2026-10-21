@@ -29,6 +29,8 @@ struct UsageWindow: Codable, Equatable, Identifiable, Sendable {
     /// 0...1, can exceed 1 when over quota.
     var used: Double
     var resetsAt: Date?
+    /// Window length, for pace. Optional so older saved state still decodes.
+    var duration: TimeInterval?
 }
 
 struct Account: Codable, Equatable, Sendable {

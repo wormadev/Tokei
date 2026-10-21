@@ -180,6 +180,7 @@ private struct DisplaySettings: View {
     @AppStorage(Prefs.showHistoryKey) private var showHistory = false
     @AppStorage(Prefs.absoluteResetsKey) private var absoluteResets = false
     @AppStorage(Prefs.usageDisplayKey) private var usageDisplay = UsageDisplay.used.rawValue
+    @AppStorage(Prefs.showPaceKey) private var showPace = true
 
     private var snapshots: [Snapshot] {
         refresher.enabled.compactMap { refresher.states[$0]?.snapshot }
@@ -193,6 +194,11 @@ private struct DisplaySettings: View {
         Form {
             Section("Always shown: session and weekly limits") {
                 Toggle("Account and plan", isOn: $showAccount)
+                VStack(alignment: .leading, spacing: 2) {
+                    Toggle("Pace", isOn: $showPace)
+                    Text("Ahead or behind an even spread over the window, and whether it lasts until reset.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 toggle("Spend, credits and breakdown", isOn: $showDetails, available: snapshots.contains { !$0.details.isEmpty },
                        note: "None of your providers report spend or credits right now.")
                 toggle("Per-model limits", isOn: $showModelLimits, available: snapshots.contains { $0.windows.contains { $0.kind == .secondary } },

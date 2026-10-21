@@ -11,6 +11,7 @@ enum Prefs {
     static let showModelLimitsKey = "show.modelLimits"
     static let showHistoryKey = "show.history"
     static let absoluteResetsKey = "show.absoluteResets"
+    static let showPaceKey = "show.pace"
     static let providerOrderKey = "providerOrder"
     static let refreshOnOpenKey = "refreshOnOpen"
 
@@ -28,6 +29,7 @@ enum Prefs {
             showModelLimitsKey: false,
             showHistoryKey: false,
             absoluteResetsKey: false,
+            showPaceKey: true,
         ]
         for id in ProviderID.allCases { defaults[enabledKey(id)] = true }
         UserDefaults.standard.register(defaults: defaults)

@@ -8,6 +8,11 @@ enum Design {
     static let innerRadius: CGFloat = 4
     static let panelWidth: CGFloat = 340
 
+    /// Green with room to spare, orange when using faster than an even spread.
+    static func paceColor(_ pace: Pace) -> Color {
+        pace.delta > 0 ? .orange : .green
+    }
+
     /// Neutral until it matters: orange from 80%, red from 95%.
     static func color(for used: Double) -> Color {
         switch used {

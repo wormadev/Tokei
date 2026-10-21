@@ -87,7 +87,8 @@ struct CodexProvider: UsageProvider {
                     label: isSession.map { $0 ? "Session" : "Weekly" } ?? slot.capitalized,
                     kind: .primary,
                     used: percent / 100,
-                    resetsAt: window.reset_at.map { Date(timeIntervalSince1970: $0) }
+                    resetsAt: window.reset_at.map { Date(timeIntervalSince1970: $0) },
+                    duration: seconds
                 )
             }
         var details: [Detail] = []

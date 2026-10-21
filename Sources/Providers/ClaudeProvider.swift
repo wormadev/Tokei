@@ -168,18 +168,21 @@ struct ClaudeProvider: UsageProvider {
         )
     }
 
+    static let sessionLength: TimeInterval = 5 * 3600
+    static let weekLength: TimeInterval = 7 * 86400
+
     static func windows(from limits: [Usage.Limit]) -> [UsageWindow] {
         limits.compactMap { limit in
             guard let percent = limit.percent else { return nil }
             let resets = ISODate.parse(limit.resets_at)
             switch limit.kind {
             case "session":
-                return UsageWindow(id: "session", label: "Session", kind: .primary, used: percent / 100, resetsAt: resets)
+                return UsageWindow(id: "session", label: "Session", kind: .primary, used: percent / 100, resetsAt: resets, duration: Self.sessionLength)
             case "weekly_all":
-                return UsageWindow(id: "weekly", label: "Weekly", kind: .primary, used: percent / 100, resetsAt: resets)
+                return UsageWindow(id: "weekly", label: "Weekly", kind: .primary, used: percent / 100, resetsAt: resets, duration: Self.weekLength)
             case "weekly_scoped":
                 let model = limit.scope?.model?.display_name ?? "Model"
-                return UsageWindow(id: "weekly-\(model.lowercased())", label: "\(model) weekly", kind: .secondary, used: percent / 100, resetsAt: resets)
+                return UsageWindow(id: "weekly-\(model.lowercased())", label: "\(model) weekly", kind: .secondary, used: percent / 100, resetsAt: resets, duration: Self.weekLength)
             default:
                 return nil
             }
@@ -195,7 +198,10 @@ struct ClaudeProvider: UsageProvider {
         ]
         return entries.compactMap { id, label, kind, window -> UsageWindow? in
             guard let utilization = window?.utilization else { return nil }
-            return UsageWindow(id: id, label: label, kind: kind, used: utilization / 100, resetsAt: ISODate.parse(window?.resets_at))
+            return UsageWindow(
+                id: id, label: label, kind: kind, used: utilization / 100, resetsAt: ISODate.parse(window?.resets_at),
+                duration: id == "session" ? Self.sessionLength : Self.weekLength
+            )
         }
     }
 

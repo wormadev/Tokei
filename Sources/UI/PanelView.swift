@@ -161,8 +161,15 @@ struct WindowRow: View {
     let now: Date
     let absoluteResets: Bool
     @AppStorage(Prefs.usageDisplayKey) private var usageDisplay = UsageDisplay.used.rawValue
+    @AppStorage(Prefs.showPaceKey) private var showPace = true
 
     private var display: UsageDisplay { UsageDisplay(rawValue: usageDisplay) ?? .used }
+
+    /// Hidden once the limit is used up: "in deficit" adds nothing then.
+    private var pace: Pace? {
+        guard showPace, window.used < 1 else { return nil }
+        return Pace(window: window, now: now)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -180,7 +187,16 @@ struct WindowRow: View {
                     .contentTransition(.numericText(value: display.value(window.used)))
                     .frame(minWidth: 40, alignment: .trailing)
             }
-            UsageBar(used: window.used, display: display)
+            UsageBar(used: window.used, display: display, pace: pace)
+            if let pace {
+                HStack {
+                    Text(pace.summary)
+                        .foregroundStyle(pace.isOnTrack ? AnyShapeStyle(.secondary) : AnyShapeStyle(Design.paceColor(pace)))
+                    Spacer()
+                    Text(pace.forecast(now: now)).foregroundStyle(.secondary)
+                }
+                .font(.caption)
+            }
             if history.count > 1 {
                 Sparkline(points: history).frame(height: 24)
             }
@@ -192,6 +208,7 @@ struct WindowRow: View {
 struct UsageBar: View {
     let used: Double
     var display: UsageDisplay = .used
+    var pace: Pace?
 
     var body: some View {
         GeometryReader { proxy in
@@ -201,6 +218,13 @@ struct UsageBar: View {
                     .fill(Design.color(for: used))
                     // Color stays keyed to usage: red means nearly out in either mode.
                     .frame(width: proxy.size.width * min(max(display.value(used), 0), 1))
+                // Where usage would be with an even spread over the window.
+                if let pace, !pace.isOnTrack {
+                    Capsule()
+                        .fill(Design.paceColor(pace))
+                        .frame(width: 2, height: 10)
+                        .offset(x: proxy.size.width * display.value(pace.expected) - 1)
+                }
             }
         }
         .frame(height: 6)

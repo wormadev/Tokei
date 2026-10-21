@@ -89,3 +89,42 @@ struct CodexParsingTests {
         #expect(CodexProvider.snapshot(usage: usage, idToken: "h.\(payload).s").account.user == "me@x.com")
     }
 }
+
+struct PaceTests {
+    private let now = Date(timeIntervalSince1970: 1_000_000)
+
+    private func window(used: Double, elapsed: TimeInterval, duration: TimeInterval = 7 * 86400) -> UsageWindow {
+        UsageWindow(id: "weekly", label: "Weekly", kind: .primary, used: used, resetsAt: now.addingTimeInterval(duration - elapsed), duration: duration)
+    }
+
+    @Test func `half the week gone with 40 percent used is 10 percent in reserve and lasts`() throws {
+        let pace = try #require(Pace(window: window(used: 0.4, elapsed: 3.5 * 86400), now: now))
+        #expect(abs(pace.delta + 0.1) < 0.0001)
+        #expect(pace.summary == "10% in reserve")
+        #expect(pace.forecast(now: now) == "Lasts until reset")
+    }
+
+    @Test func `using faster than the spread forecasts running out`() throws {
+        // 80% used after 2 of 5 hours: 0.4/h, the remaining 20% lasts 30 minutes.
+        let pace = try #require(Pace(window: window(used: 0.8, elapsed: 2 * 3600, duration: 5 * 3600), now: now))
+        #expect(pace.summary == "40% in deficit")
+        #expect(pace.runsOutIn.map { abs($0 - 1800) < 1 } == true)
+        #expect(pace.forecast(now: now) == "Runs out in 30m")
+    }
+
+    @Test func `no pace without a reset time, early in the window, or with an unknown length`() {
+        #expect(Pace(window: window(used: 0.01, elapsed: 0.02 * 7 * 86400), now: now) == nil)
+        var noReset = window(used: 0.4, elapsed: 86400)
+        noReset.resetsAt = nil
+        #expect(Pace(window: noReset, now: now) == nil)
+        var noLength = window(used: 0.4, elapsed: 86400)
+        noLength.duration = nil
+        #expect(Pace(window: noLength, now: now) == nil)
+    }
+
+    @Test func `within two points is on pace`() throws {
+        let pace = try #require(Pace(window: window(used: 0.51, elapsed: 3.5 * 86400), now: now))
+        #expect(pace.isOnTrack)
+        #expect(pace.summary == "1% in deficit")
+    }
+}
