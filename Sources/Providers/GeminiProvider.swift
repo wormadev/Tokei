@@ -69,7 +69,13 @@ struct GeminiProvider: UsageProvider {
             URLQueryItem(name: "grant_type", value: "refresh_token"),
         ]
         request.httpBody = Data((form.percentEncodedQuery ?? "").utf8)
-        let data = try await HTTP.data(request, unauthorizedHint: "Run `gemini` and sign in again.")
+        let data: Data
+        do {
+            data = try await HTTP.data(request, unauthorizedHint: "Run `gemini` and sign in again.")
+        } catch ProviderError.http(400) {
+            // invalid_grant: the refresh token was revoked or expired.
+            throw ProviderError.unauthorized("Run `gemini` and sign in again.")
+        }
         guard let response = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let access = response["access_token"] as? String
         else { throw ProviderError.badResponse("token refresh") }
@@ -78,11 +84,22 @@ struct GeminiProvider: UsageProvider {
         updated["access_token"] = access
         updated["expiry_date"] = (Date.now.timeIntervalSince1970 + ((response["expires_in"] as? Double) ?? 3600)) * 1000
         if let id = response["id_token"] { updated["id_token"] = id }
-        if let out = try? JSONSerialization.data(withJSONObject: updated, options: [.prettyPrinted]) {
-            try? out.write(to: credsFile, options: [.atomic])
-            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: credsFile.path)
-        }
+        writeBack(updated, ifRefreshTokenIs: refreshToken)
         return updated
+    }
+
+    /// Skips the write if the CLI re-authenticated meanwhile, so a newer sign-in is never clobbered.
+    /// The temp file is 0600 from creation, so tokens are never briefly world-readable.
+    static func writeBack(_ creds: [String: Any], ifRefreshTokenIs refreshToken: String) {
+        let current = (try? Data(contentsOf: credsFile)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        guard current?["refresh_token"] as? String == refreshToken,
+              let data = try? JSONSerialization.data(withJSONObject: creds, options: [.prettyPrinted])
+        else { return }
+        let temp = credsFile.deletingLastPathComponent().appending(path: ".oauth_creds.quota-\(UUID().uuidString)")
+        guard FileManager.default.createFile(atPath: temp.path, contents: data, attributes: [.posixPermissions: 0o600]) else { return }
+        if (try? FileManager.default.replaceItemAt(credsFile, withItemAt: temp)) == nil {
+            try? FileManager.default.removeItem(at: temp)
+        }
     }
 
     // MARK: - Parsing

@@ -47,7 +47,7 @@ struct CodexProvider: UsageProvider {
 
     struct Usage: Decodable {
         struct Window: Decodable {
-            var used_percent: Double
+            var used_percent: Double?
             var reset_at: Double?
             var limit_window_seconds: Double?
         }
@@ -69,17 +69,20 @@ struct CodexProvider: UsageProvider {
     }
 
     static func snapshot(usage: Usage, idToken: String?, now: Date = .now) -> Snapshot {
-        let windows = [usage.rate_limit?.primary_window, usage.rate_limit?.secondary_window]
-            .compactMap(\.self)
-            // The API has been seen returning them swapped; order by length instead of trusting slot.
-            .sorted { ($0.limit_window_seconds ?? 0) < ($1.limit_window_seconds ?? 0) }
-            .map { window in
-                let isSession = (window.limit_window_seconds ?? 0) <= 6 * 3600
+        let slots = [("primary", usage.rate_limit?.primary_window), ("secondary", usage.rate_limit?.secondary_window)]
+        let windows = slots
+            .compactMap { slot, window in window.flatMap { w in w.used_percent.map { (slot, w, $0) } } }
+            // The API has been seen returning them swapped; label by length instead of trusting the slot.
+            .sorted { ($0.1.limit_window_seconds ?? 0) < ($1.1.limit_window_seconds ?? 0) }
+            .map { slot, window, percent in
+                let seconds = window.limit_window_seconds
+                let isSession = seconds.map { $0 <= 6 * 3600 }
                 return UsageWindow(
-                    id: isSession ? "session" : "weekly",
-                    label: isSession ? "Session" : "Weekly",
+                    // Unknown length: keep slot-based ids so the two windows stay distinct.
+                    id: isSession.map { $0 ? "session" : "weekly" } ?? slot,
+                    label: isSession.map { $0 ? "Session" : "Weekly" } ?? slot.capitalized,
                     kind: .primary,
-                    used: window.used_percent / 100,
+                    used: percent / 100,
                     resetsAt: window.reset_at.map { Date(timeIntervalSince1970: $0) }
                 )
             }

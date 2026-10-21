@@ -30,6 +30,18 @@ struct RefresherTests {
         #expect(state?.failures == 1)
     }
 
+    @Test func `not configured drops the snapshot so a signed-out account stops showing`() {
+        let refresher = makeRefresher()
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        refresher.apply(.success(snapshot(used: 0.3, at: now)), to: .claude, now: now)
+        refresher.apply(.failure(ProviderError.notConfigured("Sign in")), to: .claude, now: now)
+        #expect(refresher.states[.claude]?.snapshot == nil)
+        #expect(refresher.states[.claude]?.error == "Sign in")
+
+        refresher.clear(.claude)
+        #expect(refresher.states[.claude] == nil)
+    }
+
     @Test func `due after interval, and after retryAt when failing`() {
         let refresher = makeRefresher()
         let now = Date(timeIntervalSince1970: 1_000_000)

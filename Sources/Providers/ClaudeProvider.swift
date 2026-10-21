@@ -29,31 +29,46 @@ struct ClaudeProvider: UsageProvider {
         return dir.appending(path: ".credentials.json")
     }
 
+    static func readFile() -> Credentials? {
+        (try? Data(contentsOf: credentialsFile))
+            .flatMap { try? JSONDecoder().decode(Credentials.self, from: $0) }
+            .flatMap { $0.claudeAiOauth == nil ? nil : $0 }
+    }
+
+    static func readKeychain(allowUI: Bool) -> Credentials? {
+        Keychain.read(service: keychainService, allowUI: allowUI)
+            .flatMap { try? JSONDecoder().decode(Credentials.self, from: $0) }
+            .flatMap { $0.claudeAiOauth == nil ? nil : $0 }
+    }
+
+    /// Settings › Connect: the one place that may show the Keychain prompt.
+    @discardableResult
+    static func connect() -> Bool {
+        guard readKeychain(allowUI: true) != nil else { return false }
+        UserDefaults.standard.set(true, forKey: keychainConnectedKey)
+        return true
+    }
+
     /// Claude Code keeps the live token in the Keychain on macOS; the file is often stale.
-    /// The file wins only while it is unexpired, so no Keychain read is needed at all then.
-    static func loadCredentials(allowUI: Bool) -> Credentials? {
-        let file = (try? Data(contentsOf: credentialsFile)).flatMap { try? JSONDecoder().decode(Credentials.self, from: $0) }
-        if let file, file.claudeAiOauth != nil, !file.isExpired { return file }
-        if allowUI || UserDefaults.standard.bool(forKey: keychainConnectedKey),
-           let data = Keychain.read(service: keychainService, allowUI: allowUI),
-           let keychain = try? JSONDecoder().decode(Credentials.self, from: data),
-           keychain.claudeAiOauth != nil
-        {
-            return keychain
+    /// An unexpired file wins, so no Keychain read is needed at all then.
+    static func resolveCredentials() throws -> Credentials {
+        let file = readFile()
+        if let file, !file.isExpired { return file }
+        let connected = UserDefaults.standard.bool(forKey: keychainConnectedKey)
+        if connected, let keychain = readKeychain(allowUI: false) { return keychain }
+        if Keychain.exists(service: keychainService) {
+            // Claude Code re-creating its item resets the Always Allow grant.
+            throw ProviderError.notConfigured(connected
+                ? "Keychain access lost. Click Connect in Settings › Providers."
+                : "Click Connect in Settings › Providers to read Claude Code's sign-in.")
         }
-        return file?.claudeAiOauth == nil ? nil : file
+        if let file { return file }
+        throw ProviderError.notConfigured("Run `claude` and sign in.")
     }
 
     func fetch() async throws -> Snapshot {
-        guard let credentials = Self.loadCredentials(allowUI: false), let oauth = credentials.claudeAiOauth else {
-            let connected = UserDefaults.standard.bool(forKey: Self.keychainConnectedKey)
-            throw ProviderError.notConfigured(connected
-                ? "Keychain access denied. Click Connect in Settings › Providers."
-                : "Click Connect in Settings › Providers to read Claude Code's sign-in.")
-        }
-        if credentials.isExpired, !UserDefaults.standard.bool(forKey: Self.keychainConnectedKey), Keychain.exists(service: Self.keychainService) {
-            throw ProviderError.notConfigured("Click Connect in Settings › Providers to read Claude Code's sign-in.")
-        }
+        let credentials = try Self.resolveCredentials()
+        guard let oauth = credentials.claudeAiOauth else { throw ProviderError.notConfigured("Run `claude` and sign in.") }
         if credentials.isExpired {
             throw ProviderError.unauthorized("Sign-in expired. Run `claude` once to refresh it.")
         }

@@ -11,13 +11,19 @@ struct PanelView: View {
                 empty
             } else {
                 // Coarse clock for "ago"/"resets in" labels: they change on the minute, not per frame.
-                TimelineView(.periodic(from: .now, by: 30)) { context in
-                    VStack(spacing: 8) {
-                        ForEach(refresher.enabled) { id in
-                            ProviderCard(id: id, state: refresher.states[id] ?? ProviderState(), history: refresher.history, now: context.date)
+                ScrollView {
+                    TimelineView(.periodic(from: .now, by: 30)) { context in
+                        VStack(spacing: 8) {
+                            ForEach(refresher.enabled) { id in
+                                ProviderCard(id: id, state: refresher.states[id] ?? ProviderState(), history: refresher.history, now: context.date)
+                            }
                         }
                     }
                 }
+                .scrollBounceBehavior(.basedOnSize)
+                .scrollIndicators(.automatic)
+                // Grow with content, scroll only once the panel would run off screen.
+                .frame(maxHeight: (NSScreen.main?.visibleFrame.height ?? 800) - 80)
             }
         }
         .padding(12)

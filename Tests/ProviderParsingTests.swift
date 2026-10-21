@@ -49,6 +49,17 @@ struct CodexParsingTests {
         #expect(snapshot.details == [Detail(label: "Credits", value: 12.5.formatted(.number.precision(.fractionLength(0 ... 2))))])
     }
 
+    @Test func `windows without length or percent stay distinct or are skipped`() throws {
+        let usage = try decode(CodexProvider.Usage.self, """
+        {"rate_limit":{"primary_window":{"used_percent":5},"secondary_window":{"used_percent":null,"limit_window_seconds":604800}}}
+        """)
+        let snapshot = CodexProvider.snapshot(usage: usage, idToken: nil)
+        #expect(snapshot.windows.map(\.id) == ["primary"])
+
+        let both = try decode(CodexProvider.Usage.self, #"{"rate_limit":{"primary_window":{"used_percent":5},"secondary_window":{"used_percent":9}}}"#)
+        #expect(Set(CodexProvider.snapshot(usage: both, idToken: nil).windows.map(\.id)).count == 2)
+    }
+
     @Test func `reads email from id token claims`() {
         let payload = Data(#"{"email":"me@x.com"}"#.utf8).base64EncodedString()
             .replacingOccurrences(of: "=", with: "")

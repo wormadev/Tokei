@@ -107,6 +107,8 @@ final class Panel: NSPanel {
     var statusItemFrame: (() -> NSRect?)?
     private var topEdge: CGFloat?
     private var anchorMidX: CGFloat?
+    /// The status item's screen, not the panel's last one: they differ across displays.
+    private var anchorScreen: NSScreen?
     private var outsideClickMonitor: Any?
 
     init(rootView: some View) {
@@ -140,10 +142,12 @@ final class Panel: NSPanel {
         if let button, let window = button.window {
             let rect = window.convertToScreen(button.convert(button.bounds, to: nil))
             anchorMidX = rect.midX
+            anchorScreen = window.screen
             topEdge = rect.minY - 6
             place(frame.size)
         }
         makeKeyAndOrderFront(nil)
+        guard outsideClickMonitor == nil else { return }
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
@@ -170,7 +174,7 @@ final class Panel: NSPanel {
     /// Centered under the status item, kept on screen, growing downward.
     private func place(_ size: CGSize) {
         let top = topEdge ?? frame.maxY
-        let visible = (screen ?? NSScreen.main)?.visibleFrame ?? .zero
+        let visible = (anchorScreen ?? screen ?? NSScreen.main)?.visibleFrame ?? .zero
         var x = (anchorMidX ?? frame.midX) - size.width / 2
         x = min(max(x, visible.minX + 8), visible.maxX - size.width - 8)
         setFrame(NSRect(x: x, y: top - size.height, width: size.width, height: size.height), display: true)

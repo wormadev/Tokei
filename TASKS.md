@@ -6,8 +6,10 @@
 - [x] Glass panel, status item with highest usage, right-click menu
 - [x] Settings: General / Providers / Display
 - [ ] Live check per provider with real accounts (needs user: Claude Connect, Copilot sign-in, fresh `codex` token)
-- [ ] App icon
+- [x] App icon (Design/make-icon.swift)
 - [ ] Release pipeline (Developer ID, notarize, Sparkle) like WormaSounds
+
+- [x] Review fixes: Claude Connect/Keychain loss, multi-display panel, sleep vs lock, sign-out clears data, Gemini write-back race, Copilot save/cancel
 
 ## Later
 - [ ] Provider order in panel (drag in Settings)

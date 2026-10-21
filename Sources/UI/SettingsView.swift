@@ -164,12 +164,11 @@ private struct ProviderRow: View {
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button("Connect") {
-                    if ClaudeProvider.loadCredentials(allowUI: true) != nil {
-                        UserDefaults.standard.set(true, forKey: ClaudeProvider.keychainConnectedKey)
+                    if ClaudeProvider.connect() {
                         actionError = nil
                         Task { await refresher.refresh(.claude) }
                     } else {
-                        actionError = "No Claude Code sign-in found. Run `claude` and sign in."
+                        actionError = "No Keychain access to Claude Code's sign-in. Run `claude`, sign in, then Connect and choose Always Allow."
                     }
                 }
             }
@@ -207,6 +206,7 @@ private struct ProviderRow: View {
                 Button("Sign Out") {
                     CopilotDeviceFlow.signOut()
                     copilotSignedIn = false
+                    refresher.clear(.copilot)
                 }
             }
         } else {
@@ -231,9 +231,9 @@ private struct ProviderRow: View {
                 copilotSignedIn = true
                 actionError = nil
                 await refresher.refresh(.copilot)
-            } catch is CancellationError {
-                return
             } catch {
+                // Cancel mid-request surfaces as URLError.cancelled, not CancellationError.
+                if Task.isCancelled { return }
                 copilotCode = nil
                 actionError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }

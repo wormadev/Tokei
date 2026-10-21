@@ -1,6 +1,8 @@
 import Foundation
 
-enum ProviderID: String, CaseIterable, Codable, Identifiable, Sendable {
+/// CodingKeyRepresentable: persisted dictionaries use readable string keys. Removing a case
+/// later still fails decoding of saved state (it is then rebuilt by the next refresh).
+enum ProviderID: String, CaseIterable, Codable, CodingKeyRepresentable, Identifiable, Sendable {
     case claude, codex, cursor, gemini, copilot
 
     var id: String { rawValue }

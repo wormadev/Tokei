@@ -99,7 +99,9 @@ enum CopilotDeviceFlow {
             request.httpBody = Data("client_id=\(clientID)&device_code=\(code.device_code)&grant_type=urn:ietf:params:oauth:grant-type:device_code".utf8)
             let response = try await HTTP.json(Response.self, request, unauthorizedHint: "GitHub refused the sign-in.")
             if let token = response.access_token {
-                _ = Keychain.write(Data(token.utf8), service: CopilotProvider.keychainService, account: CopilotProvider.keychainAccount)
+                guard Keychain.write(Data(token.utf8), service: CopilotProvider.keychainService, account: CopilotProvider.keychainAccount) else {
+                    throw ProviderError.notConfigured("Couldn't save the GitHub token to the Keychain.")
+                }
                 return
             }
             switch response.error {

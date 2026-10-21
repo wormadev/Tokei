@@ -24,7 +24,9 @@ final class Refresher {
     @ObservationIgnored private let providers: [ProviderID: any UsageProvider]
     @ObservationIgnored private let store: StateStore
     @ObservationIgnored private var loop: Task<Void, Never>?
-    @ObservationIgnored private var paused = false
+    /// Separate flags: waking usually lands on the lock screen, which must stay paused.
+    @ObservationIgnored private var asleep = false
+    @ObservationIgnored private var locked = false
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
     init(providers: [any UsageProvider], store: StateStore = StateStore()) {
@@ -65,7 +67,7 @@ final class Refresher {
     }
 
     func refreshDue(now: Date = .now) async {
-        guard !paused else { return }
+        guard !asleep, !locked else { return }
         await withTaskGroup(of: Void.self) { group in
             for id in enabled where isDue(id, now: now) {
                 group.addTask { await self.refresh(id) }
@@ -103,11 +105,18 @@ final class Refresher {
             state.retryAt = nil
             history.record(id, snapshot: snapshot)
         case let .failure(error):
+            // Signed out or credentials gone: old numbers would belong to a different (or no) account.
+            if case .notConfigured = error as? ProviderError { state.snapshot = nil }
             state.failures += 1
             state.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             state.retryAt = now.addingTimeInterval(Self.backoff(error: error, failures: state.failures))
         }
         states[id] = state
+        store.save(.init(states: states, history: history))
+    }
+
+    func clear(_ id: ProviderID) {
+        states[id] = nil
         store.save(.init(states: states, history: history))
     }
 
@@ -125,21 +134,28 @@ final class Refresher {
     private func observeSystem() {
         let workspace = NSWorkspace.shared.notificationCenter
         let distributed = DistributedNotificationCenter.default()
-        let pause: @Sendable (Notification) -> Void = { [weak self] _ in Task { @MainActor in self?.paused = true } }
-        let resume: @Sendable (Notification) -> Void = { [weak self] _ in
-            Task { @MainActor in
-                self?.paused = false
-                // Give Wi-Fi a moment to come back before hitting the network.
-                try? await Task.sleep(for: .seconds(5))
-                await self?.refreshDue()
-            }
+        let set: @Sendable (PauseReason, Bool) -> @Sendable (Notification) -> Void = { [weak self] reason, on in
+            { _ in Task { @MainActor in await self?.setPaused(reason, on) } }
         }
         observers = [
-            workspace.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main, using: pause),
-            workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main, using: resume),
-            distributed.addObserver(forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main, using: pause),
-            distributed.addObserver(forName: .init("com.apple.screenIsUnlocked"), object: nil, queue: .main, using: resume),
+            workspace.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main, using: set(.sleep, true)),
+            workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main, using: set(.sleep, false)),
+            distributed.addObserver(forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main, using: set(.lock, true)),
+            distributed.addObserver(forName: .init("com.apple.screenIsUnlocked"), object: nil, queue: .main, using: set(.lock, false)),
         ]
+    }
+
+    enum PauseReason: Sendable { case sleep, lock }
+
+    private func setPaused(_ reason: PauseReason, _ on: Bool) async {
+        switch reason {
+        case .sleep: asleep = on
+        case .lock: locked = on
+        }
+        guard !on else { return }
+        // Give Wi-Fi a moment to come back before hitting the network.
+        try? await Task.sleep(for: .seconds(5))
+        await refreshDue()
     }
 }
 
