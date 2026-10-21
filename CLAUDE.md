@@ -1,6 +1,6 @@
 # Tokei
 
-Menu bar AI plan usage (Claude, Codex, Cursor, Gemini, Copilot) for macOS 26+, Liquid Glass UI. See SPEC.md.
+Menu bar AI plan usage (Claude, Codex) for macOS 26+, Liquid Glass UI. See SPEC.md.
 
 ## Build
 

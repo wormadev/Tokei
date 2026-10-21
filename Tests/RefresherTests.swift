@@ -123,7 +123,7 @@ struct PrefsTests {
         #expect(MenuBarStyle(rawValue: "codex") == .provider(.codex))
         #expect(MenuBarStyle(rawValue: nil) == .highest)
         #expect(MenuBarStyle(rawValue: "removed-provider") == .highest)
-        #expect(MenuBarStyle.provider(.cursor).rawValue == "cursor")
+        #expect(MenuBarStyle.provider(.codex).rawValue == "codex")
         #expect(MenuBarStyle.icon.sources(enabled: [.claude]) == nil)
         #expect(MenuBarStyle.highest.sources(enabled: [.claude, .codex]) == [.claude, .codex])
         #expect(MenuBarStyle.provider(.codex).sources(enabled: [.claude]) == [.codex])
@@ -133,9 +133,9 @@ struct PrefsTests {
         let defaults = UserDefaults.standard
         let saved = defaults.string(forKey: Prefs.providerOrderKey)
         defer { defaults.set(saved, forKey: Prefs.providerOrderKey) }
-        defaults.set("cursor,bogus,claude", forKey: Prefs.providerOrderKey)
-        #expect(Prefs.providerOrder == [.cursor, .claude, .codex, .gemini, .copilot])
-        Prefs.providerOrder = [.copilot, .claude]
-        #expect(Prefs.providerOrder.prefix(2) == [.copilot, .claude])
+        defaults.set("codex,cursor,bogus", forKey: Prefs.providerOrderKey)
+        #expect(Prefs.providerOrder == [.codex, .claude])
+        Prefs.providerOrder = [.claude, .codex]
+        #expect(Prefs.providerOrder == [.claude, .codex])
     }
 }

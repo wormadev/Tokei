@@ -64,9 +64,6 @@ enum Prefs {
         let found: [ProviderID: Bool] = [
             .claude: fm.fileExists(atPath: ClaudeProvider.credentialsFile.path) || Keychain.exists(service: ClaudeProvider.keychainService),
             .codex: fm.fileExists(atPath: CodexProvider.authFile.path),
-            .cursor: fm.fileExists(atPath: CursorProvider.stateDB.path),
-            .gemini: fm.fileExists(atPath: GeminiProvider.credsFile.path),
-            .copilot: false,
         ]
         for (id, present) in found { defaults.set(present, forKey: enabledKey(id)) }
         defaults.set(true, forKey: didDetectKey)

@@ -1,6 +1,6 @@
 # Tokei
 
-Menu bar app showing AI coding plan usage for Claude, Codex, Cursor, Gemini and Copilot. A from-scratch replacement for CodexBar (MIT, used as reference for endpoints only, no code copied). macOS 26+, Liquid Glass.
+Menu bar app showing AI coding plan usage for Claude and Codex. A from-scratch replacement for CodexBar (MIT, used as reference for endpoints only, no code copied). macOS 26+, Liquid Glass.
 
 ## Goals
 
@@ -17,7 +17,7 @@ Menu bar app showing AI coding plan usage for Claude, Codex, Cursor, Gemini and 
 ## Non-goals
 
 - No token refresh for Claude/Codex: their refresh tokens belong to the CLIs and rotating them breaks the CLI. Expired token -> "Run `claude`" / "Run `codex`".
-- No browser cookie import, no CLI/PTY scraping, no widgets, no Sparkle (yet), no other providers.
+- No browser cookie import, no CLI/PTY scraping, no widgets, no Sparkle (yet). Cursor, Gemini and Copilot were removed in v0.1 to keep scope small; their providers are in git history (before the claude-codex-only change).
 
 ## Data sources
 
@@ -25,9 +25,6 @@ Menu bar app showing AI coding plan usage for Claude, Codex, Cursor, Gemini and 
 |---|---|---|
 | Claude | `~/.claude/.credentials.json` if unexpired, else Keychain `Claude Code-credentials` (after Connect) | `GET api.anthropic.com/api/oauth/usage` (+ `/api/oauth/profile` for email), header `anthropic-beta: oauth-2025-04-20` |
 | Codex | `$CODEX_HOME/auth.json` or `~/.codex/auth.json` | `GET chatgpt.com/backend-api/wham/usage`, `ChatGPT-Account-Id` |
-| Cursor | `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb`, key `cursorAuth/accessToken` | `GET cursor.com/api/usage-summary`, `/api/auth/me`, cookie `WorkosCursorSessionToken=<sub>%3A%3A<jwt>` |
-| Gemini | `~/.gemini/oauth_creds.json`; refresh with client id/secret from env or the installed gemini-cli package | `POST cloudcode-pa.googleapis.com/v1internal:loadCodeAssist`, `:retrieveUserQuota` |
-| Copilot | Own GitHub device flow (client `Iv1.b507a08c87ecfe98`, scope `read:user`), token in own Keychain item | `GET api.github.com/copilot_internal/user`, `/user` |
 
 ## Architecture
 
