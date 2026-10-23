@@ -20,7 +20,7 @@ struct PanelView: View {
                     TimelineView(.periodic(from: .now, by: 30)) { context in
                         VStack(spacing: 8) {
                             ForEach(refresher.enabled) { id in
-                                ProviderCard(id: id, state: refresher.states[id] ?? ProviderState(), history: refresher.history, connector: connector, now: context.date)
+                                ProviderCard(id: id, state: refresher.states[id] ?? ProviderState(), status: refresher.statuses[id], history: refresher.history, connector: connector, now: context.date)
                             }
                         }
                     }
@@ -76,6 +76,7 @@ struct PanelView: View {
 struct ProviderCard: View {
     let id: ProviderID
     let state: ProviderState
+    let status: ServiceStatus?
     let history: History
     let connector: Connector
     let now: Date
@@ -85,10 +86,14 @@ struct ProviderCard: View {
     @AppStorage(Prefs.showModelLimitsKey) private var showModelLimits = false
     @AppStorage(Prefs.showHistoryKey) private var showHistory = false
     @AppStorage(Prefs.absoluteResetsKey) private var absoluteResets = false
+    @AppStorage(Prefs.showStatusKey) private var showStatus = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             title
+            if showStatus, let status {
+                StatusRow(status: status)
+            }
             if let snapshot = state.snapshot {
                 if showAccount, let user = snapshot.account.user {
                     Text(user).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
@@ -164,7 +169,26 @@ struct ProviderCard: View {
     }
 }
 
-/// Banked resets, with a Reset button that needs a second click: spending one can't be undone.
+/// An open incident on the provider's status page. Opens the incident on click.
+struct StatusRow: View {
+    let status: ServiceStatus
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        Button {
+            openURL(status.link)
+        } label: {
+            Label(status.title, systemImage: "exclamationmark.triangle.fill")
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+        }
+        .buttonStyle(.plain)
+        .font(.callout)
+        .foregroundStyle(status.severity == .major ? Color.red : Color.orange)
+        .help("Open the status page")
+    }
+}
+
 /// Banked resets, with a Reset that needs a second click: spending one can't be undone.
 /// Text-style buttons and a single line, so the row doesn't reflow when confirming.
 struct BankedRow: View {

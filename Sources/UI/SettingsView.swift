@@ -193,6 +193,7 @@ private struct DisplaySettings: View {
     @AppStorage(Prefs.absoluteResetsKey) private var absoluteResets = false
     @AppStorage(Prefs.usageDisplayKey) private var usageDisplay = UsageDisplay.used.rawValue
     @AppStorage(Prefs.showPaceKey) private var showPace = true
+    @AppStorage(Prefs.showStatusKey) private var showStatus = true
 
     private var snapshots: [Snapshot] {
         refresher.enabled.compactMap { refresher.states[$0]?.snapshot }
@@ -209,6 +210,11 @@ private struct DisplaySettings: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Toggle("Pace", isOn: $showPace)
                     Text("Ahead or behind an even spread over the window, and whether it lasts until reset.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Toggle("Service status", isOn: $showStatus)
+                    Text("Shows outages of Claude Code or Codex from status.claude.com and status.openai.com.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 toggle("Spend, credits and breakdown", isOn: $showDetails, available: snapshots.contains { !$0.details.isEmpty },

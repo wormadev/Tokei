@@ -182,3 +182,53 @@ struct BankedResetTests {
         #expect(BankedResets(count: 2, nextExpiry: nil).text(now: now) == "2 banked resets")
     }
 }
+
+struct ServiceStatusTests {
+    private let page = URL(string: "https://status.claude.com")!
+
+    private func parse(_ json: String) throws -> ServiceStatus? {
+        let summary = try decode(ServiceStatus.Summary.self, json)
+        return ServiceStatus.parse(summary, watching: ["Claude Code", "Claude API"], page: page)
+    }
+
+    @Test func `all operational is no status`() throws {
+        #expect(try parse("""
+        {"status":{"indicator":"none","description":"All Systems Operational"},
+         "components":[{"name":"Claude Code","status":"operational"},{"name":"claude.ai","status":"operational"}],
+         "incidents":[]}
+        """) == nil)
+    }
+
+    @Test func `an outage elsewhere on the page is ignored`() throws {
+        #expect(try parse("""
+        {"status":{"indicator":"major","description":"Major System Outage"},
+         "components":[{"name":"Claude Code","status":"operational"},{"name":"claude.ai","status":"major_outage"}],
+         "incidents":[{"name":"claude.ai is down","shortlink":"https://stspg.io/a","components":[{"name":"claude.ai","status":"major_outage"}]}]}
+        """) == nil)
+    }
+
+    @Test func `a degraded watched component is named by its incident`() throws {
+        let status = try #require(try parse("""
+        {"status":{"indicator":"minor","description":"Minor Service Outage"},
+         "components":[{"name":"Claude Code","status":"degraded_performance"},{"name":"claude.ai","status":"operational"}],
+         "incidents":[{"name":"Elevated errors on Claude Code","shortlink":"https://stspg.io/b","components":[{"name":"Claude Code","status":"degraded_performance"}]}]}
+        """))
+        #expect(status == ServiceStatus(title: "Elevated errors on Claude Code", severity: .minor, link: URL(string: "https://stspg.io/b")!))
+    }
+
+    @Test func `an outage without an incident names the component and is major`() throws {
+        let status = try #require(try parse("""
+        {"status":{"indicator":"major","description":"Partial System Outage"},
+         "components":[{"name":"Claude API (api.anthropic.com)","status":"partial_outage"}]}
+        """))
+        #expect(status == ServiceStatus(title: "Claude API (api.anthropic.com): partial outage", severity: .major, link: page))
+    }
+
+    @Test func `renamed components fall back to the page indicator`() throws {
+        let status = try #require(try parse("""
+        {"status":{"indicator":"critical","description":"Major System Outage"},
+         "components":[{"name":"Something new","status":"major_outage"}],"incidents":[]}
+        """))
+        #expect(status == ServiceStatus(title: "Major System Outage", severity: .major, link: page))
+    }
+}

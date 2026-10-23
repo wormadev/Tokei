@@ -24,6 +24,8 @@ final class Refresher {
     /// Providers whose CLI or sign-in exists on this Mac. Others are hidden from the panel.
     private(set) var installed: Set<ProviderID> = []
     private(set) var history = History()
+    /// Open incidents from the providers' status pages. Not persisted: an old outage isn't news.
+    private(set) var statuses: [ProviderID: ServiceStatus] = [:]
 
     @ObservationIgnored var onReset: ((ProviderID, UsageWindow) -> Void)?
     @ObservationIgnored private let providers: [ProviderID: any UsageProvider]
@@ -117,6 +119,7 @@ final class Refresher {
         guard let provider = providers[id], !refreshing.contains(id) else { return }
         refreshing.insert(id)
         defer { refreshing.remove(id) }
+        async let status: Void = refreshStatus(id)
         let result: Result<Snapshot, Error>
         do {
             result = try .success(await provider.fetch())
@@ -124,6 +127,20 @@ final class Refresher {
             result = .failure(error)
         }
         apply(result, to: id, now: .now)
+        await status
+    }
+
+    /// An unreachable status page clears the badge rather than leaving an old incident up.
+    private func refreshStatus(_ id: ProviderID) async {
+        guard UserDefaults.standard.bool(forKey: Prefs.showStatusKey) else {
+            statuses[id] = nil
+            return
+        }
+        do {
+            statuses[id] = try await ServiceStatus.fetch(id)
+        } catch {
+            statuses[id] = nil
+        }
     }
 
     func apply(_ result: Result<Snapshot, Error>, to id: ProviderID, now: Date) {
