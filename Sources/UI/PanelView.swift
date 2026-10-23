@@ -234,7 +234,7 @@ struct WindowRow: View {
                 Text(window.label).font(.body.weight(.semibold))
                 Spacer()
                 if let pace {
-                    Text(pace.headline(display: display, now: now))
+                    Text(pace.headline(now: now))
                         .font(.callout)
                         .foregroundStyle(pace.runsOut ? AnyShapeStyle(Color.orange) : AnyShapeStyle(.secondary))
                 }

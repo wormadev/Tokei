@@ -103,12 +103,10 @@ struct PaceTests {
         UsageWindow(id: "weekly", label: "Weekly", kind: .primary, used: used, resetsAt: now.addingTimeInterval(duration - elapsed), duration: duration)
     }
 
-    @Test func `half the week gone with 40 percent used projects 80 percent used at reset`() throws {
+    @Test func `half the week gone with 40 percent used is 10 percent in reserve and lasts`() throws {
         let pace = try #require(Pace(window: window(used: 0.4, elapsed: 3.5 * 86400), now: now))
         #expect(abs(pace.delta + 0.1) < 0.0001)
-        #expect(abs(pace.projected - 0.8) < 0.0001)
-        #expect(pace.headline(display: .remaining, now: now) == "~20% left at reset")
-        #expect(pace.headline(display: .used, now: now) == "~80% used at reset")
+        #expect(pace.headline(now: now) == "10% in reserve · Lasts until reset")
     }
 
     @Test func `using faster than the spread forecasts running out`() throws {
@@ -116,7 +114,7 @@ struct PaceTests {
         let pace = try #require(Pace(window: window(used: 0.8, elapsed: 2 * 3600, duration: 5 * 3600), now: now))
         #expect(pace.runsOut)
         #expect(pace.runsOutIn.map { abs($0 - 1800) < 1 } == true)
-        #expect(pace.headline(display: .used, now: now) == "Runs out in 30m")
+        #expect(pace.headline(now: now) == "40% in deficit · Runs out in 30m")
     }
 
     @Test func `no pace without a reset time, early in the window, or with an unknown length`() {
@@ -130,8 +128,9 @@ struct PaceTests {
     }
 
     @Test func `within two points is on pace`() throws {
-        let pace = try #require(Pace(window: window(used: 0.51, elapsed: 3.5 * 86400), now: now))
+        let pace = try #require(Pace(window: window(used: 0.49, elapsed: 3.5 * 86400), now: now))
         #expect(pace.isOnTrack)
+        #expect(pace.headline(now: now) == "On pace · Lasts until reset")
     }
 }
 
