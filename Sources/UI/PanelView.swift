@@ -85,7 +85,6 @@ struct ProviderCard: View {
     @AppStorage(Prefs.showDetailsKey) private var showDetails = false
     @AppStorage(Prefs.showModelLimitsKey) private var showModelLimits = false
     @AppStorage(Prefs.showHistoryKey) private var showHistory = false
-    @AppStorage(Prefs.absoluteResetsKey) private var absoluteResets = false
     @AppStorage(Prefs.showStatusKey) private var showStatus = true
 
     var body: some View {
@@ -102,8 +101,7 @@ struct ProviderCard: View {
                     WindowRow(
                         window: window,
                         history: showHistory ? history.points(id, window.id) : [],
-                        now: now,
-                        absoluteResets: absoluteResets
+                        now: now
                     )
                 }
                 // Always shown: a banked reset is the one number you can act on.
@@ -239,8 +237,8 @@ struct WindowRow: View {
     let window: UsageWindow
     let history: [History.Point]
     let now: Date
-    let absoluteResets: Bool
     @AppStorage(Prefs.usageDisplayKey) private var usageDisplay = UsageDisplay.used.rawValue
+    @AppStorage(Prefs.absoluteResetsKey) private var absoluteResets = false
     @AppStorage(Prefs.showPaceKey) private var showPace = true
 
     private var display: UsageDisplay { UsageDisplay(rawValue: usageDisplay) ?? .used }
@@ -265,15 +263,29 @@ struct WindowRow: View {
             }
             UsageBar(used: window.used, display: display, pace: pace)
             HStack(alignment: .firstTextBaseline) {
-                Text(display == .used ? "\(display.text(window.used)) used" : "\(display.text(window.used)) left")
-                    .monospacedDigit()
-                    .contentTransition(.numericText(value: display.value(window.used)))
+                Button {
+                    usageDisplay = (display == .used ? UsageDisplay.remaining : .used).rawValue
+                } label: {
+                    Text(display == .used ? "\(display.text(window.used)) used" : "\(display.text(window.used)) left")
+                        .monospacedDigit()
+                        .contentTransition(.numericText(value: display.value(window.used)))
+                }
+                .help(display == .used ? "Show what's left" : "Show what's used")
                 Spacer()
                 if let resets = window.resetsAt {
-                    Text("Resets \(TimeText.reset(resets, now: now, absolute: absoluteResets))")
-                        .foregroundStyle(.secondary)
+                    Button {
+                        absoluteResets.toggle()
+                    } label: {
+                        Text("Resets \(TimeText.reset(resets, now: now, absolute: absoluteResets))")
+                            .foregroundStyle(.secondary)
+                    }
+                    .help(absoluteResets ? "Show time until reset" : "Show reset as clock time")
+                } else if window.used == 0 {
+                    // The window starts with the first message, so there is no reset time yet.
+                    Text("Not started").foregroundStyle(.secondary)
                 }
             }
+            .buttonStyle(.plain)
             .font(.callout)
             if history.count > 1 {
                 Sparkline(points: history).frame(height: 24)
