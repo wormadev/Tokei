@@ -33,18 +33,19 @@ struct Pace: Equatable {
     /// Within 2 points of an even spread.
     var isOnTrack: Bool { abs(delta) <= 0.02 }
 
-    /// Usage at reset if the current rate holds, capped at 100%.
-    var projected: Double { min(expected > 0 ? (delta + expected) / expected : 0, 1) }
-
     var runsOut: Bool { runsOutIn != nil }
 
-    /// "~22% left at reset", or "Runs out in 2h" when the current rate won't last.
-    func headline(display: UsageDisplay, now: Date) -> String {
-        if let runsOutIn {
-            if runsOutIn <= 60 { return "Runs out now" }
-            return "Runs out \(TimeText.reset(now.addingTimeInterval(runsOutIn), now: now, absolute: false))"
-        }
-        let points = Int((display.value(projected) * 100).rounded())
-        return display == .used ? "~\(points)% used at reset" : "~\(points)% left at reset"
+    /// CodexBar's wording: margin against an even spread, then whether it lasts.
+    /// "10% in reserve · Lasts until reset", "8% in deficit · Runs out in 2h".
+    func headline(now: Date) -> String {
+        let points = Int((abs(delta) * 100).rounded())
+        let margin = isOnTrack ? "On pace" : delta > 0 ? "\(points)% in deficit" : "\(points)% in reserve"
+        return "\(margin) · \(verdict(now: now))"
+    }
+
+    private func verdict(now: Date) -> String {
+        guard let runsOutIn else { return "Lasts until reset" }
+        if runsOutIn <= 60 { return "Runs out now" }
+        return "Runs out \(TimeText.reset(now.addingTimeInterval(runsOutIn), now: now, absolute: false))"
     }
 }

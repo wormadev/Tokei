@@ -12,6 +12,7 @@ enum Prefs {
     static let showHistoryKey = "show.history"
     static let absoluteResetsKey = "show.absoluteResets"
     static let showPaceKey = "show.pace"
+    static let showStatusKey = "show.status"
     static let notifyResetsKey = "notify.resets"
     static let providerOrderKey = "providerOrder"
     static let refreshOnOpenKey = "refreshOnOpen"
@@ -31,6 +32,7 @@ enum Prefs {
             showHistoryKey: false,
             absoluteResetsKey: false,
             showPaceKey: true,
+            showStatusKey: true,
             notifyResetsKey: true,
         ]
         for id in ProviderID.allCases { defaults[enabledKey(id)] = true }

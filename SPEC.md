@@ -25,6 +25,7 @@ Menu bar app showing AI coding plan usage for Claude and Codex. A from-scratch r
 |---|---|---|
 | Claude | `~/.claude/.credentials.json` if unexpired, else Keychain `Claude Code-credentials` (after Connect) | `GET api.anthropic.com/api/oauth/usage` (+ `/api/oauth/profile` for email), header `anthropic-beta: oauth-2025-04-20` |
 | Codex | `$CODEX_HOME/auth.json` or `~/.codex/auth.json` | `GET chatgpt.com/backend-api/wham/usage`, `ChatGPT-Account-Id` |
+| Service status | none | `GET status.claude.com/api/v2/summary.json`, `status.openai.com/api/v2/summary.json` (Statuspage). Watches the "Claude Code"/"Claude API" and "Codex" components; toggle in Display |
 
 ## Architecture
 

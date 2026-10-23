@@ -103,12 +103,10 @@ struct PaceTests {
         UsageWindow(id: "weekly", label: "Weekly", kind: .primary, used: used, resetsAt: now.addingTimeInterval(duration - elapsed), duration: duration)
     }
 
-    @Test func `half the week gone with 40 percent used projects 80 percent used at reset`() throws {
+    @Test func `half the week gone with 40 percent used is 10 percent in reserve and lasts`() throws {
         let pace = try #require(Pace(window: window(used: 0.4, elapsed: 3.5 * 86400), now: now))
         #expect(abs(pace.delta + 0.1) < 0.0001)
-        #expect(abs(pace.projected - 0.8) < 0.0001)
-        #expect(pace.headline(display: .remaining, now: now) == "~20% left at reset")
-        #expect(pace.headline(display: .used, now: now) == "~80% used at reset")
+        #expect(pace.headline(now: now) == "10% in reserve · Lasts until reset")
     }
 
     @Test func `using faster than the spread forecasts running out`() throws {
@@ -116,7 +114,7 @@ struct PaceTests {
         let pace = try #require(Pace(window: window(used: 0.8, elapsed: 2 * 3600, duration: 5 * 3600), now: now))
         #expect(pace.runsOut)
         #expect(pace.runsOutIn.map { abs($0 - 1800) < 1 } == true)
-        #expect(pace.headline(display: .used, now: now) == "Runs out in 30m")
+        #expect(pace.headline(now: now) == "40% in deficit · Runs out in 30m")
     }
 
     @Test func `no pace without a reset time, early in the window, or with an unknown length`() {
@@ -130,8 +128,9 @@ struct PaceTests {
     }
 
     @Test func `within two points is on pace`() throws {
-        let pace = try #require(Pace(window: window(used: 0.51, elapsed: 3.5 * 86400), now: now))
+        let pace = try #require(Pace(window: window(used: 0.49, elapsed: 3.5 * 86400), now: now))
         #expect(pace.isOnTrack)
+        #expect(pace.headline(now: now) == "On pace · Lasts until reset")
     }
 }
 
@@ -181,5 +180,55 @@ struct BankedResetTests {
         let one = BankedResets(count: 1, nextExpiry: expiry).text(now: now)
         #expect(one.hasPrefix("1 banked reset · expires "))
         #expect(BankedResets(count: 2, nextExpiry: nil).text(now: now) == "2 banked resets")
+    }
+}
+
+struct ServiceStatusTests {
+    private let page = URL(string: "https://status.claude.com")!
+
+    private func parse(_ json: String) throws -> ServiceStatus? {
+        let summary = try decode(ServiceStatus.Summary.self, json)
+        return ServiceStatus.parse(summary, watching: ["Claude Code", "Claude API"], page: page)
+    }
+
+    @Test func `all operational is no status`() throws {
+        #expect(try parse("""
+        {"status":{"indicator":"none","description":"All Systems Operational"},
+         "components":[{"name":"Claude Code","status":"operational"},{"name":"claude.ai","status":"operational"}],
+         "incidents":[]}
+        """) == nil)
+    }
+
+    @Test func `an outage elsewhere on the page is ignored`() throws {
+        #expect(try parse("""
+        {"status":{"indicator":"major","description":"Major System Outage"},
+         "components":[{"name":"Claude Code","status":"operational"},{"name":"claude.ai","status":"major_outage"}],
+         "incidents":[{"name":"claude.ai is down","shortlink":"https://stspg.io/a","components":[{"name":"claude.ai","status":"major_outage"}]}]}
+        """) == nil)
+    }
+
+    @Test func `a degraded watched component is named by its incident`() throws {
+        let status = try #require(try parse("""
+        {"status":{"indicator":"minor","description":"Minor Service Outage"},
+         "components":[{"name":"Claude Code","status":"degraded_performance"},{"name":"claude.ai","status":"operational"}],
+         "incidents":[{"name":"Elevated errors on Claude Code","shortlink":"https://stspg.io/b","components":[{"name":"Claude Code","status":"degraded_performance"}]}]}
+        """))
+        #expect(status == ServiceStatus(title: "Elevated errors on Claude Code", severity: .minor, link: URL(string: "https://stspg.io/b")!))
+    }
+
+    @Test func `an outage without an incident names the component and is major`() throws {
+        let status = try #require(try parse("""
+        {"status":{"indicator":"major","description":"Partial System Outage"},
+         "components":[{"name":"Claude API (api.anthropic.com)","status":"partial_outage"}]}
+        """))
+        #expect(status == ServiceStatus(title: "Claude API (api.anthropic.com): partial outage", severity: .major, link: page))
+    }
+
+    @Test func `renamed components fall back to the page indicator`() throws {
+        let status = try #require(try parse("""
+        {"status":{"indicator":"critical","description":"Major System Outage"},
+         "components":[{"name":"Something new","status":"major_outage"}],"incidents":[]}
+        """))
+        #expect(status == ServiceStatus(title: "Major System Outage", severity: .major, link: page))
     }
 }

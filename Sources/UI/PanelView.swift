@@ -20,7 +20,7 @@ struct PanelView: View {
                     TimelineView(.periodic(from: .now, by: 30)) { context in
                         VStack(spacing: 8) {
                             ForEach(refresher.enabled) { id in
-                                ProviderCard(id: id, state: refresher.states[id] ?? ProviderState(), history: refresher.history, connector: connector, now: context.date)
+                                ProviderCard(id: id, state: refresher.states[id] ?? ProviderState(), status: refresher.statuses[id], history: refresher.history, connector: connector, now: context.date)
                             }
                         }
                     }
@@ -76,6 +76,7 @@ struct PanelView: View {
 struct ProviderCard: View {
     let id: ProviderID
     let state: ProviderState
+    let status: ServiceStatus?
     let history: History
     let connector: Connector
     let now: Date
@@ -84,11 +85,14 @@ struct ProviderCard: View {
     @AppStorage(Prefs.showDetailsKey) private var showDetails = false
     @AppStorage(Prefs.showModelLimitsKey) private var showModelLimits = false
     @AppStorage(Prefs.showHistoryKey) private var showHistory = false
-    @AppStorage(Prefs.absoluteResetsKey) private var absoluteResets = false
+    @AppStorage(Prefs.showStatusKey) private var showStatus = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             title
+            if showStatus, let status {
+                StatusRow(status: status)
+            }
             if let snapshot = state.snapshot {
                 if showAccount, let user = snapshot.account.user {
                     Text(user).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
@@ -97,8 +101,7 @@ struct ProviderCard: View {
                     WindowRow(
                         window: window,
                         history: showHistory ? history.points(id, window.id) : [],
-                        now: now,
-                        absoluteResets: absoluteResets
+                        now: now
                     )
                 }
                 // Always shown: a banked reset is the one number you can act on.
@@ -164,7 +167,26 @@ struct ProviderCard: View {
     }
 }
 
-/// Banked resets, with a Reset button that needs a second click: spending one can't be undone.
+/// An open incident on the provider's status page. Opens the incident on click.
+struct StatusRow: View {
+    let status: ServiceStatus
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        Button {
+            openURL(status.link)
+        } label: {
+            Label(status.title, systemImage: "exclamationmark.triangle.fill")
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+        }
+        .buttonStyle(.plain)
+        .font(.callout)
+        .foregroundStyle(status.severity == .major ? Color.red : Color.orange)
+        .help("Open the status page")
+    }
+}
+
 /// Banked resets, with a Reset that needs a second click: spending one can't be undone.
 /// Text-style buttons and a single line, so the row doesn't reflow when confirming.
 struct BankedRow: View {
@@ -215,8 +237,8 @@ struct WindowRow: View {
     let window: UsageWindow
     let history: [History.Point]
     let now: Date
-    let absoluteResets: Bool
     @AppStorage(Prefs.usageDisplayKey) private var usageDisplay = UsageDisplay.used.rawValue
+    @AppStorage(Prefs.absoluteResetsKey) private var absoluteResets = false
     @AppStorage(Prefs.showPaceKey) private var showPace = true
 
     private var display: UsageDisplay { UsageDisplay(rawValue: usageDisplay) ?? .used }
@@ -234,22 +256,36 @@ struct WindowRow: View {
                 Text(window.label).font(.body.weight(.semibold))
                 Spacer()
                 if let pace {
-                    Text(pace.headline(display: display, now: now))
+                    Text(pace.headline(now: now))
                         .font(.callout)
                         .foregroundStyle(pace.runsOut ? AnyShapeStyle(Color.orange) : AnyShapeStyle(.secondary))
                 }
             }
             UsageBar(used: window.used, display: display, pace: pace)
             HStack(alignment: .firstTextBaseline) {
-                Text(display == .used ? "\(display.text(window.used)) used" : "\(display.text(window.used)) left")
-                    .monospacedDigit()
-                    .contentTransition(.numericText(value: display.value(window.used)))
+                Button {
+                    usageDisplay = (display == .used ? UsageDisplay.remaining : .used).rawValue
+                } label: {
+                    Text(display == .used ? "\(display.text(window.used)) used" : "\(display.text(window.used)) left")
+                        .monospacedDigit()
+                        .contentTransition(.numericText(value: display.value(window.used)))
+                }
+                .help(display == .used ? "Show what's left" : "Show what's used")
                 Spacer()
                 if let resets = window.resetsAt {
-                    Text("Resets \(TimeText.reset(resets, now: now, absolute: absoluteResets))")
-                        .foregroundStyle(.secondary)
+                    Button {
+                        absoluteResets.toggle()
+                    } label: {
+                        Text("Resets \(TimeText.reset(resets, now: now, absolute: absoluteResets))")
+                            .foregroundStyle(.secondary)
+                    }
+                    .help(absoluteResets ? "Show time until reset" : "Show reset as clock time")
+                } else if window.used == 0 {
+                    // The window starts with the first message, so there is no reset time yet.
+                    Text("Not started").foregroundStyle(.secondary)
                 }
             }
+            .buttonStyle(.plain)
             .font(.callout)
             if history.count > 1 {
                 Sparkline(points: history).frame(height: 24)
