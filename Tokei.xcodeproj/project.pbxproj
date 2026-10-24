@@ -17,6 +17,7 @@
 		3CDE0534E77981C93CE5A2CC /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78C8F98A6E779DA6DD75C52F /* SettingsView.swift */; };
 		5075099FD0BC32B469D5D11A /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = E31A5B3C2101D318218CB0EB /* Keychain.swift */; };
 		5343E1F936712730FFA3E7B5 /* StatusBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7663DA1D359EBAA5B88482E7 /* StatusBarController.swift */; };
+		70B9C434E896A603F47DE1AE /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = FEDF57745297C5A196544EAA /* Sparkle */; };
 		7701078D98BEF1C72B543FB4 /* HTTP.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF540167562E6D9F84E6B4D /* HTTP.swift */; };
 		7EBBA026BAF745B70EFEF86D /* Connector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42222E421C5185122D65605C /* Connector.swift */; };
 		896ED62CC285EFE739F60AF2 /* RefresherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5A1CFE3728E18372EA5ED7B /* RefresherTests.swift */; };
@@ -26,6 +27,7 @@
 		AB93EDFEBAB707819E310C59 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = E82CB690456EFC3AA5DC6636 /* Models.swift */; };
 		B02139C7980CE99615A559CE /* ProviderParsingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C188A44B996D92F148A576A /* ProviderParsingTests.swift */; };
 		C41947D5A96581F0B62F2933 /* AgentActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6216EEFA0838076E7929A1AC /* AgentActivity.swift */; };
+		DB0CFA4843491893B76EA5B9 /* Updater.swift in Sources */ = {isa = PBXBuildFile; fileRef = F653EADBA3830746EA9958C1 /* Updater.swift */; };
 		DF41AFA7B1984D8A3EC282FC /* PanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E349BBE3B651F19D8AC07BD8 /* PanelView.swift */; };
 		EF98BB08A44F710B0A43DE6A /* JWT.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1033648AF590B0C87498D0B /* JWT.swift */; };
 		F69041983B3CE9E8B6993CCB /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 00E03FF902691C591C0EB605 /* AppIcon.icon */; };
@@ -68,8 +70,20 @@
 		E349BBE3B651F19D8AC07BD8 /* PanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelView.swift; sourceTree = "<group>"; };
 		E82CB690456EFC3AA5DC6636 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		F1033648AF590B0C87498D0B /* JWT.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JWT.swift; sourceTree = "<group>"; };
+		F653EADBA3830746EA9958C1 /* Updater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Updater.swift; sourceTree = "<group>"; };
 		FF223BF47B6D7592C9FBBE27 /* TokeiTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TokeiTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		33663360D6217B2AF3343B45 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				70B9C434E896A603F47DE1AE /* Sparkle in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		27968BB2479A394357974DC3 = {
@@ -116,6 +130,7 @@
 				0C61C853F2F27EC5ECCE0595 /* Refresher.swift */,
 				A6059790B6A749A88BDC5DF1 /* ResetNotifier.swift */,
 				7663DA1D359EBAA5B88482E7 /* StatusBarController.swift */,
+				F653EADBA3830746EA9958C1 /* Updater.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -169,6 +184,7 @@
 			buildPhases = (
 				0CC98C02E0727464540292F5 /* Sources */,
 				E497D32DC066A39B4FEFBC29 /* Resources */,
+				33663360D6217B2AF3343B45 /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -176,6 +192,7 @@
 			);
 			name = Tokei;
 			packageProductDependencies = (
+				FEDF57745297C5A196544EAA /* Sparkle */,
 			);
 			productName = Tokei;
 			productReference = 9FC10BBA76DF653345CC43C5 /* Tokei.app */;
@@ -227,6 +244,9 @@
 			);
 			mainGroup = 27968BB2479A394357974DC3;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				1830E5D86463B2EEF4EA8C2A /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = E31D5F2F30A83A717A2923E8 /* Products */;
 			projectDirPath = "";
@@ -274,6 +294,7 @@
 				3CDE0534E77981C93CE5A2CC /* SettingsView.swift in Sources */,
 				27958737654CEB15BC805AFD /* Sparkline.swift in Sources */,
 				5343E1F936712730FFA3E7B5 /* StatusBarController.swift in Sources */,
+				DB0CFA4843491893B76EA5B9 /* Updater.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -350,6 +371,7 @@
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
+				SPARKLE_PUBLIC_ED_KEY = "JT2+s/cPByGxcxFzGu5uENu9EwGeeqvjD4EM9m10OgY=";
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 6.0;
@@ -370,6 +392,7 @@
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.wormadev.Tokei;
 				SDKROOT = macosx;
+				SPARKLE_FEED_URL = "https://github.com/wormadev/Tokei/releases/latest/download/appcast.xml";
 			};
 			name = Release;
 		};
@@ -433,6 +456,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
+				SPARKLE_PUBLIC_ED_KEY = "JT2+s/cPByGxcxFzGu5uENu9EwGeeqvjD4EM9m10OgY=";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6.0;
@@ -487,6 +511,8 @@
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.wormadev.Tokei;
 				SDKROOT = macosx;
+				SPARKLE_FEED_URL = "https://github.com/wormadev/Tokei/releases/latest/download/appcast.xml";
+				SPARKLE_PUBLIC_ED_KEY = "";
 			};
 			name = Debug;
 		};
@@ -521,6 +547,25 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		1830E5D86463B2EEF4EA8C2A /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = exactVersion;
+				version = 2.10.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		FEDF57745297C5A196544EAA /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1830E5D86463B2EEF4EA8C2A /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 1B235186C57CA957BED82384 /* Project object */;
 }
