@@ -13,11 +13,12 @@ Menu bar app showing AI coding plan usage for Claude and Codex. A from-scratch r
   - Background interval configurable (default 5 min). Paused while the screen is locked or the Mac sleeps. Exponential backoff on errors (max 30 min); 429 honours Retry-After.
   - No surprise Keychain prompts: background refresh never triggers one. Claude's Keychain read only after the user clicks Connect in Settings.
 - Settings: one window, three tabs (General, Providers, Display). Every setting is a plain toggle or picker.
+- Updates: Sparkle from the GitHub releases feed (`releases/latest/download/appcast.xml`), EdDSA-signed. Off in Debug.
 
 ## Non-goals
 
 - No token refresh for Claude/Codex: their refresh tokens belong to the CLIs and rotating them breaks the CLI. Expired token -> "Run `claude`" / "Run `codex`".
-- No browser cookie import, no CLI/PTY scraping, no widgets, no Sparkle (yet). Cursor, Gemini and Copilot were removed in v0.1 to keep scope small; their providers are in git history (before the claude-codex-only change).
+- No browser cookie import, no CLI/PTY scraping, no widgets. Cursor, Gemini and Copilot were removed in v0.1 to keep scope small; their providers are in git history (before the claude-codex-only change).
 
 ## Data sources
 

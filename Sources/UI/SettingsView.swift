@@ -122,6 +122,8 @@ private struct GeneralSettings: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
 
+    private static let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+
     private var refreshFooter: String {
         let background = switch interval {
         case Prefs.agentAwareInterval: "Every 5 minutes while Claude Code or Codex is working, every 15 minutes when idle."
@@ -177,6 +179,16 @@ private struct GeneralSettings: View {
                     }
                 if let loginError {
                     Text(loginError).font(.caption).foregroundStyle(.red)
+                }
+            }
+            if Updater.shared.isConfigured {
+                Section {
+                    Toggle("Check for updates automatically", isOn: Binding(
+                        get: { Updater.shared.checksAutomatically },
+                        set: { Updater.shared.setChecksAutomatically($0) }))
+                    LabeledContent("Version \(Self.version)") {
+                        Button("Check Now") { Updater.shared.checkForUpdates() }
+                    }
                 }
             }
         }

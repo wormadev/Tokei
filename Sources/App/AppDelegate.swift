@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         connector = Connector(refresher: refresher)
         statusBar = StatusBarController(refresher: refresher, connector: connector, openSettings: { [weak self] in self?.settings.show() })
         refresher.start()
+        Updater.shared.start()
         #if DEBUG
         // `-debugShowPanel YES` / `-debugShowSettings YES`: open UI at launch for screenshots.
         // The status item has no screen frame until the menu bar lays it out.

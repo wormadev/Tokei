@@ -9,11 +9,19 @@ settings:
     DEVELOPMENT_TEAM: 4BHH38RCA7
     CODE_SIGN_STYLE: Automatic
     ENABLE_HARDENED_RUNTIME: YES
+    # Sparkle EdDSA public key (base64). Private half: login Keychain, account "tokei".
+    SPARKLE_PUBLIC_ED_KEY: "JT2+s/cPByGxcxFzGu5uENu9EwGeeqvjD4EM9m10OgY="
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.10.0
 targets:
   Tokei:
     type: application
     platform: macOS
     sources: [Sources]
+    dependencies:
+      - package: Sparkle
     scheme:
       testTargets: [TokeiTests]
     info:
@@ -23,12 +31,23 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
+        SUFeedURL: $(SPARKLE_FEED_URL)
+        SUPublicEDKey: $(SPARKLE_PUBLIC_ED_KEY)
+        # Copies already out can't gain this later; release.sh fails if generate_appcast didn't sign.
+        SURequireSignedFeed: true
+        # Sparkle refuses to start with a signed feed unless archives are verified before extraction.
+        SUVerifyUpdateBeforeExtraction: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.wormadev.Tokei
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
+        SPARKLE_FEED_URL: https://github.com/wormadev/Tokei/releases/latest/download/appcast.xml
+      configs:
+        # Updates off in Debug: the feed's releases would replace this test build.
+        Debug:
+          SPARKLE_PUBLIC_ED_KEY: ""
   TokeiTests:
     type: bundle.unit-test
     platform: macOS

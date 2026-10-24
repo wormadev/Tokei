@@ -49,6 +49,9 @@ final class StatusBarController: NSObject {
             let menu = NSMenu()
             menu.addItem(withTitle: "Refresh", action: #selector(refreshAll), keyEquivalent: "r").target = self
             menu.addItem(withTitle: "Settings…", action: #selector(showSettings), keyEquivalent: ",").target = self
+            if Updater.shared.isConfigured {
+                menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "").target = self
+            }
             menu.addItem(.separator())
             menu.addItem(withTitle: "Quit Tokei", action: #selector(NSApplication.terminate), keyEquivalent: "q")
             item.menu = menu
@@ -68,6 +71,7 @@ final class StatusBarController: NSObject {
 
     @objc private func refreshAll() { refresher.refreshAll() }
     @objc private func showSettings() { openSettings() }
+    @objc private func checkForUpdates() { Updater.shared.checkForUpdates() }
 
     private func observe() {
         withObservationTracking {
