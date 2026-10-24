@@ -1,15 +1,17 @@
 #!/bin/bash
 # Release build into build/release/: Tokei.app in a DMG plus a Sparkle appcast signed with the
 # EdDSA key under $SPARKLE_ACCOUNT. Apple Development signed, not notarized (no Developer ID yet):
-# a first install needs right-click > Open; Sparkle updates after that install without it.
+# a first install from the DMG needs Privacy & Security > Open Anyway; Sparkle updates after that
+# install without it, and the Homebrew cask strips the quarantine flag.
 #
 #   release.sh [--notes FILE] [--first-release] [--publish]
 #     --notes FILE        release notes, Markdown (default: release-notes/<version>.md)
 #     --first-release     allow a missing (404) live appcast
-#     --publish           tag v<version>, push the tag and create the GitHub release
+#     --publish           tag v<version>, push the tag, create the GitHub release, bump the cask in $TAP_SLUG
 set -euo pipefail
 
 REPO_SLUG="wormadev/Tokei"
+TAP_SLUG="wormadev/homebrew-tap"
 FEED_URL="https://github.com/$REPO_SLUG/releases/latest/download/appcast.xml"
 SPARKLE_ACCOUNT="tokei"
 DMGBUILD="dmgbuild==1.6.7"
@@ -104,3 +106,12 @@ git tag -a "v$VERSION" -m "$APP_NAME $VERSION ($BUILD)"
 git push origin "v$VERSION"
 gh release create "v$VERSION" --repo "$REPO_SLUG" --title "$APP_NAME $VERSION" --notes-file "$NOTES" \
   "$DMG" "$OUT/$APP_NAME.dmg" "$OUT/updates/appcast.xml"
+
+step "Homebrew cask"
+TAP="$OUT/tap"
+gh repo clone "$TAP_SLUG" "$TAP" -- -q
+SHA="$(shasum -a 256 "$DMG" | cut -d' ' -f1)"
+sed -i '' -e "s/^  version \".*\"/  version \"$VERSION\"/" -e "s/^  sha256 \".*\"/  sha256 \"$SHA\"/" "$TAP/Casks/tokei.rb"
+git -C "$TAP" commit -qam "chore: tokei $VERSION"
+git -C "$TAP" push -q
+echo "Published $APP_NAME $VERSION: release, appcast and cask."

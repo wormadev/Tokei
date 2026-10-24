@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds Release and packages build/dmg/Tokei-<version>.dmg (app + Applications link).
 # Signed with whatever identity Xcode picks (Apple Development today): not notarized, so other
-# Macs need right-click > Open the first time. Developer ID + notarytool would remove that.
+# Macs need Privacy & Security > Open Anyway the first time. Developer ID + notarytool would remove that.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
