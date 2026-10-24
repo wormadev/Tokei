@@ -7,7 +7,8 @@
 - [x] Settings: General / Providers / Display
 - [ ] Live check per provider with real accounts (Claude verified; Codex needs a fresh `codex` token)
 - [x] App icon (Design/make-icon.swift)
-- [ ] Release pipeline (Developer ID, notarize, Sparkle) like WormaSounds
+- [x] Release pipeline: GitHub releases + Sparkle updates (scripts/release.sh)
+- [ ] Developer ID signing + notarization (needs a Developer ID certificate)
 
 - [x] Review fixes: Claude Connect/Keychain loss, multi-display panel, sleep vs lock, sign-out clears data, Gemini write-back race, Copilot save/cancel
 
