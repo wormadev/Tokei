@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Privacy Policy: Tokei</title>
-<meta name="description" content="Tokei talks only to the AI providers you use. No accounts, no analytics, no tracking.">
+<meta name="description" content="Tokei talks only to the AI providers you use. No accounts, no tracking; an anonymous install count only if you opt in.">
 <link rel="icon" href="img/icon.png?v=2" type="image/png">
 <link rel="preload" href="fonts/fraunces.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css?v=2">
@@ -28,13 +28,14 @@
 
 <main class="legal">
   <h1>Privacy Policy</h1>
-  <p class="fine">Effective date: 2026-10-24</p>
+  <p class="fine">Effective date: 2026-10-24 (install count added in version 0.1.1)</p>
 
   <p>Tokei is a macOS menu bar app, published by wormadev, that shows how much of your Claude and Codex plans you have used. This policy describes what the app does with your data.</p>
 
   <h2>Summary</h2>
   <ul>
-    <li>Tokei has no server. There are no accounts, no analytics, no tracking and no ads.</li>
+    <li>There are no accounts, no tracking and no ads.</li>
+    <li>If you opt in, Tokei counts your install with a random ID. Nothing else about you is kept.</li>
     <li>Your sign-in tokens are sent only to the provider they belong to.</li>
     <li>Your usage numbers and settings stay on your Mac.</li>
   </ul>
@@ -51,11 +52,19 @@
     <li><strong>api.anthropic.com:</strong> your Claude usage, profile and plan, with your Claude token, and a banked reset when you click to use one.</li>
     <li><strong>chatgpt.com:</strong> your Codex usage, with your Codex token.</li>
     <li><strong>status.claude.com and status.openai.com:</strong> public service status, with no token. You can turn this off in Settings &gt; Display.</li>
-    <li><strong>github.com:</strong> the update feed and new versions. You can turn automatic checks off in Settings &gt; General.</li>
+    <li><strong>tokei.worma.dev and github.com:</strong> update checks. They go to tokei.worma.dev, which forwards them to the update feed and new versions on GitHub. You can turn automatic checks off in Settings &gt; General.</li>
   </ul>
 
   <h2>What Tokei stores</h2>
   <p>The last usage numbers, so they show instantly at launch, in <code>~/Library/Application Support/Tokei/state.json</code>, and your settings in the app's preferences. Both stay on your Mac. Deleting the app and these files removes everything.</p>
+
+  <h2>Anonymous install count</h2>
+  <p>Off unless you turn it on, either with "Include anonymous system profile" when Tokei first asks about updates, or with Share anonymous install count in Settings &gt; General. When it's on, each update check also sends:</p>
+  <ul>
+    <li>a random ID created on your Mac, not tied to you or your accounts;</li>
+    <li>Sparkle's anonymous system profile, at most once a week: app build, macOS version, CPU type, Mac model, memory and language.</li>
+  </ul>
+  <p>tokei.worma.dev keeps only the ID, the app build, the macOS version and the CPU type, per day, to count how many Macs run Tokei. It doesn't store IP addresses, and the model, memory and language are discarded. The totals are public at <a href="https://tokei.worma.dev/api/stats">tokei.worma.dev/api/stats</a>. Turn it off in Settings and nothing more is sent.</p>
 
   <h2>Notifications</h2>
   <p>If you allow them, reset notifications are created on your Mac. Nothing is sent to a push service.</p>

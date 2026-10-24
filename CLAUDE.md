@@ -15,6 +15,7 @@ Menu bar AI plan usage (Claude, Codex) for macOS 26+, Liquid Glass UI. See SPEC.
 - `site/`: static website (no build step). Same structure as WormaSounds' site; fonts Fraunces 600 headings, Instrument Sans body, self-hosted in `site/fonts`. Accent #32ADE6 (the icon's blue). Screenshots never show the account email: capture with `-show.account NO` and avoid the provider pages in Settings
 - `video/`: Remotion promo (bun, not npm). Render: `bunx remotion render Promo out/tokei.mp4 --port=3917` (port 3000 is taken on this Mac). Copies go to `site/img/tokei.mp4` and `docs/images/demo.gif`
 - Deploy: Dokploy project Tokei, app `tokei-site` (static, context `site`), redeploys on pushes to main touching `site/**` (GitHub webhook). Domain tokei.worma.dev stays HTTPS with Let's Encrypt; never switch it to HTTP. Bump `?v=` on asset URLs when a file changes: Cloudflare caches css, js, fonts, images and video
+- `server/`: Bun + SQLite app `tokei-server` in the same Dokploy project, routed at tokei.worma.dev/api. `/api/appcast.xml` counts opted-in installs (random `id`, Sparkle profile) per day and 302s to the GitHub appcast; `/api/stats` is public totals. Never store IPs. Tests: `cd server && bun test`
 - Homebrew: `wormadev/homebrew-tap`, cask `tokei`; `scripts/release.sh --publish` bumps it
 
 ## Design system
