@@ -186,9 +186,14 @@ private struct GeneralSettings: View {
                     Toggle("Check for updates automatically", isOn: Binding(
                         get: { Updater.shared.checksAutomatically },
                         set: { Updater.shared.setChecksAutomatically($0) }))
+                    Toggle("Share anonymous install count", isOn: Binding(
+                        get: { Updater.shared.sharesInstallCount },
+                        set: { Updater.shared.setSharesInstallCount($0) }))
                     LabeledContent("Version \(Self.version)") {
                         Button("Check Now") { Updater.shared.checkForUpdates() }
                     }
+                } footer: {
+                    Text("Sends a random ID and Sparkle's anonymous system profile with update checks, to count how many people use Tokei. Only the ID, app and macOS versions and CPU type are kept.")
                 }
             }
         }

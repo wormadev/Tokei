@@ -389,10 +389,10 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.wormadev.Tokei;
 				SDKROOT = macosx;
-				SPARKLE_FEED_URL = "https://github.com/wormadev/Tokei/releases/latest/download/appcast.xml";
+				SPARKLE_FEED_URL = "https://tokei.worma.dev/api/appcast.xml";
 			};
 			name = Release;
 		};
@@ -508,10 +508,10 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.wormadev.Tokei;
 				SDKROOT = macosx;
-				SPARKLE_FEED_URL = "https://github.com/wormadev/Tokei/releases/latest/download/appcast.xml";
+				SPARKLE_FEED_URL = "https://tokei.worma.dev/api/appcast.xml";
 				SPARKLE_PUBLIC_ED_KEY = "";
 			};
 			name = Debug;
