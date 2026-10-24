@@ -13,6 +13,8 @@ set -euo pipefail
 REPO_SLUG="wormadev/Tokei"
 TAP_SLUG="wormadev/homebrew-tap"
 FEED_URL="https://github.com/$REPO_SLUG/releases/latest/download/appcast.xml"
+# What the app checks: counts opted-in installs (server/), then redirects to FEED_URL.
+APP_FEED_URL="https://tokei.worma.dev/api/appcast.xml"
 SPARKLE_ACCOUNT="tokei"
 DMGBUILD="dmgbuild==1.6.7"
 APP_NAME="Tokei"
@@ -54,7 +56,7 @@ cd "$REPO"
 
 step "Preconditions"
 [[ -n "$(project_setting SPARKLE_PUBLIC_ED_KEY)" ]] || fail "SPARKLE_PUBLIC_ED_KEY in project.yml is empty."
-grep -q "SPARKLE_FEED_URL: $FEED_URL" project.yml || fail "SPARKLE_FEED_URL in project.yml is not $FEED_URL."
+grep -q "SPARKLE_FEED_URL: $APP_FEED_URL" project.yml || fail "SPARKLE_FEED_URL in project.yml is not $APP_FEED_URL."
 [[ -z "$(git status --porcelain)" ]] || fail "Working tree has uncommitted changes: commit them so the tag matches the build."
 [[ "$(git branch --show-current)" == main ]] || fail "Release from main: Sparkle's build number is main's commit count."
 VERSION="$(project_setting MARKETING_VERSION)"
@@ -79,7 +81,7 @@ xcodebuild -project "$APP_NAME.xcodeproj" -scheme "$APP_NAME" -configuration Rel
   CURRENT_PROJECT_VERSION="$BUILD" build -quiet
 codesign --verify --deep --strict "$APP"
 [[ "$(plutil -extract CFBundleVersion raw "$APP/Contents/Info.plist")" == "$BUILD" ]] || fail "Built CFBundleVersion is not $BUILD."
-[[ "$(plutil -extract SUFeedURL raw "$APP/Contents/Info.plist")" == "$FEED_URL" ]] || fail "$APP has a foreign SUFeedURL."
+[[ "$(plutil -extract SUFeedURL raw "$APP/Contents/Info.plist")" == "$APP_FEED_URL" ]] || fail "$APP has a foreign SUFeedURL."
 
 step "DMG"
 uvx --from "$DMGBUILD" dmgbuild -s "$REPO/scripts/dmg-settings.py" -D app="$APP" "$APP_NAME" "$DMG"

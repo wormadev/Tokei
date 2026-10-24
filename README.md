@@ -52,7 +52,7 @@ Also: reset notifications, used or remaining counting, provider order, launch at
 
 ## Privacy
 
-Tokei has no server, no account and no analytics. Your Claude token goes only to `api.anthropic.com`, your Codex token only to `chatgpt.com`. It also reads public status pages (`status.claude.com`, `status.openai.com`) and checks GitHub for updates. Tokei never refreshes your tokens, so it can't log the CLIs out. Usage and settings stay on your Mac.
+No account, no tracking. Your Claude token goes only to `api.anthropic.com`, your Codex token only to `chatgpt.com`. It also reads public status pages (`status.claude.com`, `status.openai.com`) and checks for updates through `tokei.worma.dev`, which forwards to GitHub. If you opt in (Settings > General > Share anonymous install count), update checks carry a random ID and Sparkle's system profile so installs can be counted; only the ID, app build, macOS version and CPU type are kept, and totals are public at [tokei.worma.dev/api/stats](https://tokei.worma.dev/api/stats). Details: [privacy policy](https://tokei.worma.dev/privacy.html). Tokei never refreshes your tokens, so it can't log the CLIs out. Usage and settings stay on your Mac.
 
 ## Build from source
 
@@ -70,6 +70,7 @@ Tests: `xcodebuild -project Tokei.xcodeproj -scheme Tokei -derivedDataPath build
 
 - `Sources`, `Tests`: the app
 - `site`: the website (static HTML)
+- `server`: the update-check endpoint that counts opted-in installs (Bun + SQLite); `cd server && bun test`
 - `video`: the promo video ([Remotion](https://www.remotion.dev)); `cd video && bun install && bunx remotion render Promo out/tokei.mp4`
 - `scripts/release.sh`: builds the DMG and the signed update feed; `--publish` creates the GitHub release and bumps the [Homebrew cask](https://github.com/wormadev/homebrew-tap)
 
