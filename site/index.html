@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tokei: your AI plan limits, in the menu bar</title>
+<meta name="description" content="See how much of your Claude and Codex plan is left, when it resets, and whether your pace lasts until then. A free menu bar app for macOS.">
+<link rel="icon" href="img/icon.png" type="image/png">
+<link rel="preload" href="fonts/fraunces.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="style.css?v=1">
+<script>if (!matchMedia("(prefers-reduced-motion: reduce)").matches) document.documentElement.classList.add("js")</script>
+</head>
+<body>
+
+<header class="nav">
+  <a class="brand" href="#top">
+    <img class="mark" src="img/icon-dark.png" alt="">
+    Tokei
+  </a>
+  <button class="menu-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><i></i><i></i></button>
+  <nav id="site-nav">
+    <a href="#features">Features</a>
+    <a href="#install">Install</a>
+    <a href="#questions">Questions</a>
+    <a href="privacy.html">Privacy</a>
+    <a class="pill" href="https://github.com/wormadev/Tokei/releases/latest/download/Tokei.dmg">Download</a>
+  </nav>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="hero-copy">
+      <h1 class="r">Know how much is left.</h1>
+      <p class="lede r">Your Claude and Codex plan limits in the menu bar: what's used, when it resets, and whether your pace lasts until then.</p>
+      <div class="ctas r">
+        <a class="button" href="https://github.com/wormadev/Tokei/releases/latest/download/Tokei.dmg">Download for Mac</a>
+        <a class="link" href="#install">Install with Homebrew</a>
+      </div>
+      <p class="fine r">Free. macOS 26 or later.</p>
+    </div>
+    <img class="hero-panel r" src="img/panel-full.png" width="386" height="443" alt="The Tokei panel: Claude session, weekly and per-model limits, each with a usage bar, pace, reset time and a 7-day history line.">
+  </section>
+
+  <section class="film">
+    <video class="r" src="img/tokei.mp4" poster="img/tokei-poster.jpg" autoplay muted loop playsinline controls preload="metadata" aria-label="A 17-second tour of Tokei"></video>
+  </section>
+
+  <section id="features" class="feature">
+    <div class="text">
+      <h2 class="r">Always in view.</h2>
+      <p class="r">Two rings and two numbers in the menu bar: the 5-hour session on top, the week below. You see a limit coming before you hit it.</p>
+    </div>
+    <div class="menubar r"><img src="img/tokei-menubar.png" width="130" height="60" alt="Tokei in the menu bar: a ring icon with 3% and 60%."></div>
+  </section>
+
+  <section class="feature flip">
+    <div class="text">
+      <h2 class="r">Pace, not just percent.</h2>
+      <p class="r">60% used means little without the clock. Tokei compares your usage to an even spread over the window and tells you if it lasts until reset, or when it runs out.</p>
+    </div>
+    <img class="shot r" src="img/panel.png" width="386" height="268" alt="Session 3% used, 2% in reserve, lasts until reset. Weekly 60% used, resets in 3 hours 14 minutes.">
+  </section>
+
+  <section class="feature">
+    <div class="text">
+      <h2 class="r">Quiet by design.</h2>
+      <p class="r">It refreshes every 5 minutes while Claude Code or Codex is working and every 15 when idle, and pauses while the Mac sleeps or is locked. No Keychain prompts in the background.</p>
+    </div>
+    <img class="shot r" src="img/settings-general.png" width="752" height="564" alt="Tokei settings: background refresh set to Agent aware, reset notifications and menu bar numbers.">
+  </section>
+
+  <section class="grid-section">
+    <h2 class="r">The little things.</h2>
+    <ul class="grid">
+      <li class="r"><h3>Reset alerts</h3><p>A notification the moment a session or weekly limit resets.</p></li>
+      <li class="r"><h3>Service status</h3><p>Shows when Claude Code or Codex has an outage, so you know it isn't you.</p></li>
+      <li class="r"><h3>7-day history</h3><p>A small line under each limit shows how your usage moved this week.</p></li>
+      <li class="r"><h3>Per-model limits</h3><p>Separate weekly limits, like Opus or Fable, get their own row.</p></li>
+      <li class="r"><h3>Used or remaining</h3><p>Count up as you use your plan, or count down what's left.</p></li>
+      <li class="r"><h3>Instant on launch</h3><p>The last numbers show right away and never blank out while refreshing.</p></li>
+      <li class="r"><h3>Your order</h3><p>Drag providers to choose which one the menu bar shows.</p></li>
+      <li class="r"><h3>Updates built in</h3><p>New versions install from the app, signed and verified.</p></li>
+    </ul>
+  </section>
+
+  <section id="install" class="install">
+    <h2 class="r">Install.</h2>
+    <h3 class="r">Homebrew</h3>
+    <div class="cmd r"><code><b>brew</b> install --cask wormadev/tap/tokei</code><button class="copy" type="button" data-copy="brew install --cask wormadev/tap/tokei">Copy</button></div>
+    <h3 class="r">Download</h3>
+    <p class="r">Tokei isn't notarized by Apple yet, so macOS asks once:</p>
+    <ol class="r">
+      <li>Open the DMG and drag Tokei to Applications.</li>
+      <li>Open Tokei. macOS says it can't check it for malicious software.</li>
+      <li>Go to System Settings &gt; Privacy &amp; Security and click Open Anyway.</li>
+    </ol>
+    <a class="button r" href="https://github.com/wormadev/Tokei/releases/latest/download/Tokei.dmg">Download Tokei.dmg</a>
+    <h3 class="r">Then</h3>
+    <p class="r">Sign in to <a href="https://docs.anthropic.com/en/docs/claude-code">Claude Code</a> or <a href="https://github.com/openai/codex">Codex</a> once, if you haven't. Tokei reads the sign-in they already saved and shows up in the menu bar.</p>
+  </section>
+
+  <section id="questions" class="faq">
+    <h2 class="r">Questions.</h2>
+    <details class="r">
+      <summary>Where do my tokens go?</summary>
+      <p>Only to the provider they belong to: your Claude token to api.anthropic.com, your Codex token to chatgpt.com. Tokei has no server, no account and no analytics.</p>
+    </details>
+    <details class="r">
+      <summary>Will it log me out of Claude Code or Codex?</summary>
+      <p>No. Tokei never refreshes their tokens: the refresh token belongs to the CLI, and rotating it would sign the CLI out. When a token expires, Tokei asks you to run <code>claude</code> or <code>codex</code> again.</p>
+    </details>
+    <details class="r">
+      <summary>Why does it ask for Keychain access?</summary>
+      <p>Claude Code keeps its sign-in in the Keychain. Tokei reads it only after you click Connect in Settings, and background refreshes never trigger a prompt. If the sign-in file in <code>~/.claude</code> is current, no Keychain access is needed.</p>
+    </details>
+    <details class="r">
+      <summary>Which plans does it work with?</summary>
+      <p>Claude plans that come with Claude Code (Pro, Max), and ChatGPT plans that include Codex.</p>
+    </details>
+    <details class="r">
+      <summary>Which Macs does it run on?</summary>
+      <p>Any Mac with macOS 26 or later.</p>
+    </details>
+  </section>
+
+  <section class="closing">
+    <img class="r" src="img/icon-dark.png" width="256" height="256" alt="">
+    <h2 class="r">Keep an eye on it.</h2>
+    <a class="button r" href="https://github.com/wormadev/Tokei/releases/latest/download/Tokei.dmg">Download for Mac</a>
+    <p class="fine r">Free. macOS 26 or later.</p>
+  </section>
+</main>
+
+<footer>
+  <a href="https://github.com/wormadev/Tokei">GitHub</a> · <a href="privacy.html">Privacy</a> · Made by wormadev
+</footer>
+
+<script>
+(() => {
+  if (!document.documentElement.classList.contains("js")) return;
+  const sections = document.querySelectorAll("main > section");
+  sections.forEach(sec => sec.querySelectorAll(".r").forEach((el, i) => el.style.setProperty("--i", i)));
+  const io = new IntersectionObserver(entries => entries.forEach(e => {
+    if (!e.isIntersecting) return;
+    e.target.classList.add("in");
+    io.unobserve(e.target);
+  }), { rootMargin: "0px 0px -18% 0px" });
+  sections.forEach(sec => io.observe(sec));
+})();
+</script>
+<script>
+(() => {
+  const nav = document.querySelector(".nav"), toggle = nav.querySelector(".menu-toggle");
+  const set = open => { nav.classList.toggle("open", open); toggle.setAttribute("aria-expanded", open); };
+  toggle.addEventListener("click", () => set(!nav.classList.contains("open")));
+  nav.querySelectorAll("nav a").forEach(a => a.addEventListener("click", () => set(false)));
+  document.querySelectorAll(".copy").forEach(b => b.addEventListener("click", async () => {
+    await navigator.clipboard.writeText(b.dataset.copy);
+    b.textContent = "Copied";
+    setTimeout(() => { b.textContent = "Copy"; }, 1500);
+  }));
+})();
+</script>
+</body>
+</html>

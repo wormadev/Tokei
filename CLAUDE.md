@@ -8,7 +8,13 @@ Menu bar AI plan usage (Claude, Codex) for macOS 26+, Liquid Glass UI. See SPEC.
 - `xcodebuild -project Tokei.xcodeproj -scheme Tokei -configuration Debug -derivedDataPath build build`
 - Tests: `xcodebuild -project Tokei.xcodeproj -scheme Tokei -derivedDataPath build test`
 - Release: `scripts/release.sh [--first-release] [--publish]` from a clean main: needs `release-notes/<version>.md` and a bumped `MARKETING_VERSION`; build number is main's commit count. Sparkle EdDSA private key: login Keychain, account `tokei`
-- DMG: `scripts/dmg.sh` → `build/dmg/Tokei-<version>.dmg`. Apple Development signed only (no Developer ID on this Mac yet), so it is not notarized and other Macs need right-click > Open
+- DMG: `scripts/dmg.sh` → `build/dmg/Tokei-<version>.dmg`. Apple Development signed only (no Developer ID on this Mac yet), so it is not notarized: other Macs need Open Anyway in System Settings > Privacy & Security after the first launch (the Homebrew cask strips the quarantine flag instead)
+
+## Site and video
+
+- `site/`: static website (no build step). Same structure as WormaSounds' site; fonts Fraunces 600 headings, Instrument Sans body, self-hosted in `site/fonts`. Accent #32ADE6 (the icon's blue). Screenshots never show the account email: capture with `-show.account NO` and avoid the provider pages in Settings
+- `video/`: Remotion promo (bun, not npm). Render: `bunx remotion render Promo out/tokei.mp4 --port=3917` (port 3000 is taken on this Mac). Copies go to `site/img/tokei.mp4` and `docs/images/demo.gif`
+- Homebrew: `wormadev/homebrew-tap`, cask `tokei`; `scripts/release.sh --publish` bumps it
 
 ## Design system
 

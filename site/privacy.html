@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy: Tokei</title>
+<meta name="description" content="Tokei talks only to the AI providers you use. No accounts, no analytics, no tracking.">
+<link rel="icon" href="img/icon.png" type="image/png">
+<link rel="preload" href="fonts/fraunces.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+
+<header class="nav">
+  <a class="brand" href="index.html">
+    <img class="mark" src="img/icon-dark.png" alt="">
+    Tokei
+  </a>
+  <button class="menu-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><i></i><i></i></button>
+  <nav id="site-nav">
+    <a href="index.html#features">Features</a>
+    <a href="index.html#install">Install</a>
+    <a href="index.html#questions">Questions</a>
+    <a href="privacy.html">Privacy</a>
+    <a class="pill" href="https://github.com/wormadev/Tokei/releases/latest/download/Tokei.dmg">Download</a>
+  </nav>
+</header>
+
+<main class="legal">
+  <h1>Privacy Policy</h1>
+  <p class="fine">Effective date: 2026-10-24</p>
+
+  <p>Tokei is a macOS menu bar app, published by wormadev, that shows how much of your Claude and Codex plans you have used. This policy describes what the app does with your data.</p>
+
+  <h2>Summary</h2>
+  <ul>
+    <li>Tokei has no server. There are no accounts, no analytics, no tracking and no ads.</li>
+    <li>Your sign-in tokens are sent only to the provider they belong to.</li>
+    <li>Your usage numbers and settings stay on your Mac.</li>
+  </ul>
+
+  <h2>What Tokei reads</h2>
+  <ul>
+    <li><strong>Claude:</strong> the sign-in Claude Code saved in <code>~/.claude/.credentials.json</code>, or, after you click Connect in Settings, the <code>Claude Code-credentials</code> item in your Keychain.</li>
+    <li><strong>Codex:</strong> the sign-in Codex saved in <code>~/.codex/auth.json</code> (or <code>$CODEX_HOME/auth.json</code>).</li>
+  </ul>
+  <p>Tokei never refreshes, changes or stores these tokens anywhere else.</p>
+
+  <h2>Who Tokei talks to</h2>
+  <ul>
+    <li><strong>api.anthropic.com:</strong> your Claude usage, profile and plan, with your Claude token, and a banked reset when you click to use one.</li>
+    <li><strong>chatgpt.com:</strong> your Codex usage, with your Codex token.</li>
+    <li><strong>status.claude.com and status.openai.com:</strong> public service status, with no token. You can turn this off in Settings &gt; Display.</li>
+    <li><strong>github.com:</strong> the update feed and new versions. You can turn automatic checks off in Settings &gt; General.</li>
+  </ul>
+
+  <h2>What Tokei stores</h2>
+  <p>The last usage numbers, so they show instantly at launch, in <code>~/Library/Application Support/Tokei/state.json</code>, and your settings in the app's preferences. Both stay on your Mac. Deleting the app and these files removes everything.</p>
+
+  <h2>Notifications</h2>
+  <p>If you allow them, reset notifications are created on your Mac. Nothing is sent to a push service.</p>
+
+  <h2>Changes</h2>
+  <p>If this policy changes, the new version will be posted on this page with a new effective date.</p>
+
+  <h2>Contact</h2>
+  <p>Questions: open an issue at <a href="https://github.com/wormadev/Tokei/issues">github.com/wormadev/Tokei</a>.</p>
+</main>
+
+<script>
+(() => {
+  const nav = document.querySelector(".nav"), toggle = nav.querySelector(".menu-toggle");
+  const set = open => { nav.classList.toggle("open", open); toggle.setAttribute("aria-expanded", open); };
+  toggle.addEventListener("click", () => set(!nav.classList.contains("open")));
+  nav.querySelectorAll("nav a").forEach(a => a.addEventListener("click", () => set(false)));
+})();
+</script>
+</body>
+</html>
