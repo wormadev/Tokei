@@ -65,6 +65,31 @@ struct RefresherTests {
         #expect(notified.count == 2)
     }
 
+    @Test func `a rate limit after a rejected sign-in keeps the sign-in alert`() {
+        let refresher = makeRefresher()
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        refresher.apply(.failure(ProviderError.unauthorized("Run `claude`")), to: .claude, now: now)
+        refresher.apply(.failure(ProviderError.rateLimited(retryAfter: 3600)), to: .claude, now: now)
+        let state = refresher.states[.claude]
+        #expect(state?.needsSignIn == true)
+        #expect(state?.error == "Run `claude`")
+        #expect(state?.retryAt == now.addingTimeInterval(3600))
+    }
+
+    @Test func `due right when the sign-in expires, once`() {
+        let refresher = makeRefresher()
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        var fresh = snapshot(used: 0.1, at: now)
+        fresh.signInExpiresAt = now.addingTimeInterval(60)
+        refresher.apply(.success(fresh), to: .claude, now: now)
+        #expect(!refresher.isDue(.claude, now: now.addingTimeInterval(59), interval: 900))
+        #expect(refresher.isDue(.claude, now: now.addingTimeInterval(61), interval: 900))
+        #expect(!refresher.isDue(.claude, now: now.addingTimeInterval(61), interval: nil))
+
+        refresher.apply(.failure(ProviderError.unauthorized("Run `claude`")), to: .claude, now: now.addingTimeInterval(61))
+        #expect(!refresher.isDue(.claude, now: now.addingTimeInterval(120), interval: 900))
+    }
+
     @Test func `a missing sign-in needs the user without an expiry notification`() {
         let refresher = makeRefresher()
         var notified = 0

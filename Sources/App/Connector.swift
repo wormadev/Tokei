@@ -38,26 +38,28 @@ final class Connector {
         .codex: ("codex", ["login", "status"]),
     ]
 
-    func renewSignIn(_ id: ProviderID) {
-        guard let command = Self.statusCommands[id], !renewing.contains(id) else { return }
+    /// True when the sign-in works again afterwards.
+    @discardableResult
+    func renewSignIn(_ id: ProviderID) async -> Bool {
+        guard let command = Self.statusCommands[id], !renewing.contains(id) else { return false }
         guard let cli = Executable.path(command.cli) else {
             notices[id] = "Couldn't find \(command.cli). Run it in Terminal."
-            return
+            return false
         }
         renewing.insert(id)
         notices[id] = nil
-        Task {
-            defer { renewing.remove(id) }
-            do {
-                try await Executable.run(cli, command.arguments)
-            } catch {
-                notices[id] = "Couldn't run \(command.cli): \(error.localizedDescription)"
-                return
-            }
-            await refresher.refresh(id)
-            if refresher.states[id]?.needsSignIn == true {
-                notices[id] = "Still expired. Open Terminal and run \(command.cli)."
-            }
+        defer { renewing.remove(id) }
+        do {
+            try await Executable.run(cli, command.arguments)
+        } catch {
+            notices[id] = "Couldn't run \(command.cli): \(error.localizedDescription)"
+            return false
         }
+        await refresher.refresh(id)
+        guard refresher.states[id]?.needsSignIn != true else {
+            notices[id] = "Still expired. Open Terminal and run \(command.cli)."
+            return false
+        }
+        return true
     }
 }

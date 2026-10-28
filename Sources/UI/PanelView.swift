@@ -145,7 +145,7 @@ struct ProviderCard: View {
                         if connector.renewing.contains(id) {
                             ProgressView().controlSize(.mini)
                         } else {
-                            Button("Fix") { connector.renewSignIn(id) }
+                            Button("Fix") { Task { await connector.renewSignIn(id) } }
                                 .buttonStyle(.borderless)
                                 .foregroundStyle(.tint)
                                 .help("Runs `\(command.cli) \(command.arguments.joined(separator: " "))`, which can renew the sign-in")

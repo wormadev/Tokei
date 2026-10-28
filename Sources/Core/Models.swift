@@ -57,6 +57,8 @@ struct Snapshot: Codable, Equatable, Sendable {
     /// Optional so older saved state still decodes.
     var banked: BankedResets?
     var fetchedAt: Date
+    /// When the CLI's access token runs out, so the refresher can check right then.
+    var signInExpiresAt: Date?
 }
 
 /// Free limit resets the plan has banked (Claude "cedar_ember" grants, Codex reset credits).

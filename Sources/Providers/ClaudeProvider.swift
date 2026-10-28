@@ -93,7 +93,9 @@ struct ClaudeProvider: UsageProvider {
             )
             if let profile { Self.profiles.withLock { $0 = [oauth.accessToken: profile] } }
         }
-        return Self.snapshot(usage: usage, profile: profile, oauth: oauth)
+        var snapshot = Self.snapshot(usage: usage, profile: profile, oauth: oauth)
+        snapshot.signInExpiresAt = oauth.expiresAt.map { Date(timeIntervalSince1970: $0 / 1000) }
+        return snapshot
     }
 
     // MARK: - Parsing

@@ -14,7 +14,8 @@
 
 ## Later
 - [x] Expired sign-in: dimmed rings + badge, notification, Fix button, no stale numbers past reset
-- [ ] Measure: does `claude auth status` / `codex login status` renew an expired token? If yes, offer it as an opt-in background step
+- [x] `claude auth status` renews an expired token (checked on a real expiry); opt-in auto-renew, refresh at token expiry
+- [ ] Check `codex login status` on a real Codex expiry (unverified)
 - [x] Provider order in panel (drag or right-click in Settings)
 - [x] Menu bar: icon, highest usage, or one provider
 - [ ] Codex: optional token refresh with write-back to auth.json (CodexBar avoids it; risk of stranding a running CLI)

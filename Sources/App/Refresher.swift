@@ -115,6 +115,7 @@ final class Refresher {
         guard let state = states[id], let last = state.lastAttempt else { return true }
         // "Only when opened": no background refresh after the first fetch.
         guard let interval else { return false }
+        if let expiry = state.snapshot?.signInExpiresAt, expiry <= now, last < expiry { return true }
         if let retryAt = state.retryAt { return now >= retryAt }
         return now.timeIntervalSince(last) >= interval
     }
@@ -130,8 +131,10 @@ final class Refresher {
         } catch {
             result = .failure(error)
         }
-        apply(result, to: id, now: .now)
         await status
+        // Last, with no await after it: callbacks may start another refresh of this provider,
+        // which `refreshing` would otherwise turn away.
+        apply(result, to: id, now: .now)
     }
 
     /// An unreachable status page clears the badge rather than leaving an old incident up.
@@ -168,9 +171,12 @@ final class Refresher {
             case .notConfigured?: state.snapshot = nil
             default: break
             }
-            state.transient = Self.isTransient(error) ? true : nil
             state.failures += 1
-            state.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            // A 429 after a rejected sign-in changes nothing: the sign-in still needs the user.
+            if !(neededSignIn && Self.isTransient(error)) {
+                state.transient = Self.isTransient(error) ? true : nil
+                state.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
             state.retryAt = now.addingTimeInterval(Self.backoff(error: error, failures: state.failures))
             if case .unauthorized(let hint)? = error as? ProviderError, !neededSignIn { onSignInExpired?(id, hint) }
         }

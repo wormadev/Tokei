@@ -25,9 +25,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ClaudeProvider(), CodexProvider(),
         ])
         refresher.onReset = { Notifier.postReset($0, $1) }
-        refresher.onSignInExpired = { Notifier.postSignInExpired($0, hint: $1) }
         Notifier.requestPermissionIfEnabled()
         connector = Connector(refresher: refresher)
+        refresher.onSignInExpired = { [connector] id, hint in
+            guard UserDefaults.standard.bool(forKey: Prefs.renewSignInKey), let connector else {
+                return Notifier.postSignInExpired(id, hint: hint)
+            }
+            Task {
+                if await !connector.renewSignIn(id) { Notifier.postSignInExpired(id, hint: hint) }
+            }
+        }
         statusBar = StatusBarController(refresher: refresher, connector: connector, openSettings: { [weak self] in self?.settings.show() })
         refresher.start()
         Updater.shared.start()

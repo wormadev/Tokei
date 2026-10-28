@@ -118,6 +118,7 @@ private struct GeneralSettings: View {
     @AppStorage(Prefs.refreshOnOpenKey) private var refreshOnOpen = true
     @AppStorage(Prefs.notifyResetsKey) private var notifyResets = true
     @AppStorage(Prefs.notifySignInKey) private var notifySignIn = true
+    @AppStorage(Prefs.renewSignInKey) private var renewSignIn = false
     @AppStorage(Prefs.menuBarWeeklyKey) private var menuBarWeekly = false
     @AppStorage(Prefs.menuBarSessionKey) private var menuBarSession = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -162,6 +163,11 @@ private struct GeneralSettings: View {
                     }
             } footer: {
                 Text("Session and weekly limits, and sign-ins that need you, for providers shown in the panel.")
+            }
+            Section {
+                Toggle("Renew expired sign-ins", isOn: $renewSignIn)
+            } footer: {
+                Text("Runs `claude auth status` or `codex login status` when a sign-in expires, so the CLI renews its own token. You're notified only if that fails.")
             }
             Section {
                 Toggle("Weekly", isOn: $menuBarWeekly)

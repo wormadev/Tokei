@@ -15,6 +15,7 @@ enum Prefs {
     static let showStatusKey = "show.status"
     static let notifyResetsKey = "notify.resets"
     static let notifySignInKey = "notify.signIn"
+    static let renewSignInKey = "renewSignIn"
     static let providerOrderKey = "providerOrder"
     static let refreshOnOpenKey = "refreshOnOpen"
 
@@ -36,6 +37,7 @@ enum Prefs {
             showStatusKey: true,
             notifyResetsKey: true,
             notifySignInKey: true,
+            renewSignInKey: false,
         ]
         for id in ProviderID.allCases { defaults[enabledKey(id)] = true }
         UserDefaults.standard.register(defaults: defaults)
