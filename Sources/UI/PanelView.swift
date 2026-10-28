@@ -133,12 +133,26 @@ struct ProviderCard: View {
                     .foregroundStyle(.secondary)
                     .help(error)
             } else if let error = state.error {
-                // Markdown so `claude` renders as code.
-                Label(LocalizedStringKey(error), systemImage: state.snapshot == nil ? "info.circle" : "exclamationmark.triangle")
-                    .font(.caption)
-                    .foregroundStyle(state.snapshot == nil ? .secondary : Color.orange)
-                    .lineLimit(2)
-                    .textSelection(.enabled)
+                HStack(alignment: .firstTextBaseline) {
+                    // Markdown so `claude` renders as code.
+                    Label(LocalizedStringKey(error), systemImage: state.snapshot == nil ? "info.circle" : "exclamationmark.triangle")
+                        .foregroundStyle(state.snapshot == nil ? .secondary : Color.orange)
+                        .lineLimit(2)
+                        .textSelection(.enabled)
+                    // An expired sign-in keeps the snapshot; a missing one has nothing to renew.
+                    if state.snapshot != nil, let command = Connector.statusCommands[id] {
+                        Spacer(minLength: 0)
+                        if connector.renewing.contains(id) {
+                            ProgressView().controlSize(.mini)
+                        } else {
+                            Button("Fix") { connector.renewSignIn(id) }
+                                .buttonStyle(.borderless)
+                                .foregroundStyle(.tint)
+                                .help("Runs `\(command.cli) \(command.arguments.joined(separator: " "))`, which can renew the sign-in")
+                        }
+                    }
+                }
+                .font(.caption)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -243,9 +257,12 @@ struct WindowRow: View {
 
     private var display: UsageDisplay { UsageDisplay(rawValue: usageDisplay) ?? .used }
 
+    /// The saved number belongs to the window before; the next refresh brings the new one.
+    private var hasReset: Bool { window.hasReset(now: now) }
+
     /// Hidden once the limit is used up: a projection adds nothing then.
     private var pace: Pace? {
-        guard showPace, window.used < 1 else { return nil }
+        guard showPace, window.used < 1, !hasReset else { return nil }
         return Pace(window: window, now: now)
     }
 
@@ -261,28 +278,16 @@ struct WindowRow: View {
                         .foregroundStyle(pace.runsOut ? AnyShapeStyle(Color.orange) : AnyShapeStyle(.secondary))
                 }
             }
-            UsageBar(used: window.used, display: display, pace: pace)
+            if hasReset {
+                Capsule().fill(.fill.tertiary).frame(height: 8)
+            } else {
+                UsageBar(used: window.used, display: display, pace: pace)
+            }
             HStack(alignment: .firstTextBaseline) {
-                Button {
-                    usageDisplay = (display == .used ? UsageDisplay.remaining : .used).rawValue
-                } label: {
-                    Text(display == .used ? "\(display.text(window.used)) used" : "\(display.text(window.used)) left")
-                        .monospacedDigit()
-                        .contentTransition(.numericText(value: display.value(window.used)))
-                }
-                .help(display == .used ? "Show what's left" : "Show what's used")
-                Spacer()
-                if let resets = window.resetsAt {
-                    Button {
-                        absoluteResets.toggle()
-                    } label: {
-                        Text("Resets \(TimeText.reset(resets, now: now, absolute: absoluteResets))")
-                            .foregroundStyle(.secondary)
-                    }
-                    .help(absoluteResets ? "Show time until reset" : "Show reset as clock time")
-                } else if window.used == 0 {
-                    // The window starts with the first message, so there is no reset time yet.
-                    Text("Not started").foregroundStyle(.secondary)
+                if hasReset, let resets = window.resetsAt {
+                    Text("Reset \(TimeText.ago(resets, now: now))").foregroundStyle(.secondary)
+                } else {
+                    amountAndReset
                 }
             }
             .buttonStyle(.plain)
@@ -292,6 +297,30 @@ struct WindowRow: View {
             }
         }
         .animation(.smooth, value: window.used)
+    }
+
+    @ViewBuilder private var amountAndReset: some View {
+            Button {
+                usageDisplay = (display == .used ? UsageDisplay.remaining : .used).rawValue
+            } label: {
+                Text(display == .used ? "\(display.text(window.used)) used" : "\(display.text(window.used)) left")
+                    .monospacedDigit()
+                    .contentTransition(.numericText(value: display.value(window.used)))
+            }
+            .help(display == .used ? "Show what's left" : "Show what's used")
+            Spacer()
+            if let resets = window.resetsAt {
+                Button {
+                    absoluteResets.toggle()
+                } label: {
+                    Text("Resets \(TimeText.reset(resets, now: now, absolute: absoluteResets))")
+                        .foregroundStyle(.secondary)
+                }
+                .help(absoluteResets ? "Show time until reset" : "Show reset as clock time")
+            } else if window.used == 0 {
+                // The window starts with the first message, so there is no reset time yet.
+                Text("Not started").foregroundStyle(.secondary)
+            }
     }
 }
 

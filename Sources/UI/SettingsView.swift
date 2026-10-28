@@ -117,6 +117,7 @@ private struct GeneralSettings: View {
     @AppStorage(Prefs.refreshIntervalKey) private var interval = Prefs.agentAwareInterval
     @AppStorage(Prefs.refreshOnOpenKey) private var refreshOnOpen = true
     @AppStorage(Prefs.notifyResetsKey) private var notifyResets = true
+    @AppStorage(Prefs.notifySignInKey) private var notifySignIn = true
     @AppStorage(Prefs.menuBarWeeklyKey) private var menuBarWeekly = false
     @AppStorage(Prefs.menuBarSessionKey) private var menuBarSession = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -153,10 +154,14 @@ private struct GeneralSettings: View {
             Section {
                 Toggle("Notify when a limit resets", isOn: $notifyResets)
                     .onChange(of: notifyResets) { _, on in
-                        if on { ResetNotifier.requestPermissionIfEnabled() }
+                        if on { Notifier.requestPermissionIfEnabled() }
+                    }
+                Toggle("Notify when a sign-in expires", isOn: $notifySignIn)
+                    .onChange(of: notifySignIn) { _, on in
+                        if on { Notifier.requestPermissionIfEnabled() }
                     }
             } footer: {
-                Text("Session and weekly limits, for providers shown in the panel.")
+                Text("Session and weekly limits, and sign-ins that need you, for providers shown in the panel.")
             }
             Section {
                 Toggle("Weekly", isOn: $menuBarWeekly)

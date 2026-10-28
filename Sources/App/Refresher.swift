@@ -12,6 +12,9 @@ struct ProviderState: Codable, Equatable {
     var lastAttempt: Date?
     /// Earliest next background attempt after a failure or 429.
     var retryAt: Date?
+
+    /// Only the user can fix this one, so the menu bar flags it.
+    var needsSignIn: Bool { error != nil && transient != true }
 }
 
 /// Owns all fetching. One 30 s tick decides who is due, so there is a single timer, it can
@@ -28,6 +31,7 @@ final class Refresher {
     private(set) var statuses: [ProviderID: ServiceStatus] = [:]
 
     @ObservationIgnored var onReset: ((ProviderID, UsageWindow) -> Void)?
+    @ObservationIgnored var onSignInExpired: ((ProviderID, String) -> Void)?
     @ObservationIgnored private let providers: [ProviderID: any UsageProvider]
     @ObservationIgnored private let store: StateStore
     @ObservationIgnored private var loop: Task<Void, Never>?
@@ -145,6 +149,7 @@ final class Refresher {
 
     func apply(_ result: Result<Snapshot, Error>, to id: ProviderID, now: Date) {
         var state = states[id] ?? ProviderState()
+        let neededSignIn = state.needsSignIn
         state.lastAttempt = now
         switch result {
         case let .success(snapshot):
@@ -167,6 +172,7 @@ final class Refresher {
             state.failures += 1
             state.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             state.retryAt = now.addingTimeInterval(Self.backoff(error: error, failures: state.failures))
+            if case .unauthorized(let hint)? = error as? ProviderError, !neededSignIn { onSignInExpired?(id, hint) }
         }
         states[id] = state
         store.save(.init(states: states, history: history))

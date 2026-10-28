@@ -31,6 +31,11 @@ struct UsageWindow: Codable, Equatable, Identifiable, Sendable {
     var resetsAt: Date?
     /// Window length, for pace. Optional so older saved state still decodes.
     var duration: TimeInterval?
+
+    /// Past its reset time the saved number is from the previous window.
+    func hasReset(now: Date) -> Bool {
+        resetsAt.map { $0 <= now } ?? false
+    }
 }
 
 struct Account: Codable, Equatable, Sendable {

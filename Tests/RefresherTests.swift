@@ -45,6 +45,35 @@ struct RefresherTests {
         #expect(refresher.states[.claude] == nil)
     }
 
+    @Test func `an expired sign-in notifies once and needs the user, a server error does neither`() {
+        let refresher = makeRefresher()
+        var notified: [String] = []
+        refresher.onSignInExpired = { notified.append($1) }
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        refresher.apply(.success(snapshot(used: 0.3, at: now)), to: .claude, now: now)
+        refresher.apply(.failure(ProviderError.http(502)), to: .claude, now: now)
+        #expect(refresher.states[.claude]?.needsSignIn == false)
+
+        refresher.apply(.failure(ProviderError.unauthorized("Run `claude`")), to: .claude, now: now)
+        refresher.apply(.failure(ProviderError.unauthorized("Run `claude`")), to: .claude, now: now)
+        #expect(refresher.states[.claude]?.needsSignIn == true)
+        #expect(notified == ["Run `claude`"])
+
+        refresher.apply(.success(snapshot(used: 0.3, at: now)), to: .claude, now: now)
+        #expect(refresher.states[.claude]?.needsSignIn == false)
+        refresher.apply(.failure(ProviderError.unauthorized("Run `claude`")), to: .claude, now: now)
+        #expect(notified.count == 2)
+    }
+
+    @Test func `a missing sign-in needs the user without an expiry notification`() {
+        let refresher = makeRefresher()
+        var notified = 0
+        refresher.onSignInExpired = { _, _ in notified += 1 }
+        refresher.apply(.failure(ProviderError.notConfigured("Sign in")), to: .claude, now: .now)
+        #expect(refresher.states[.claude]?.needsSignIn == true)
+        #expect(notified == 0)
+    }
+
     @Test func `providers that are not installed are left out of the panel`() {
         let store = StateStore(url: URL.temporaryDirectory.appending(path: "tokei-test-\(UUID().uuidString).json"))
         let refresher = Refresher(providers: [StubProvider(id: .claude), StubProvider(id: .codex, installed: false)], store: store)
@@ -162,6 +191,20 @@ struct MenuRingsTests {
         #expect(StatusBarController.ringValues(states, enabled: [.claude, .codex]) == .init(session: 0.13, weekly: 0.43))
         #expect(StatusBarController.ringValues(states, enabled: [.codex, .claude]) == .init(session: nil, weekly: 0.7))
         #expect(StatusBarController.ringValues(states, enabled: []) == .init(session: nil, weekly: nil))
+    }
+
+    @Test func `rings drop limits past their reset and dim when the sign-in expired`() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        var claude = state([
+            UsageWindow(id: "session", label: "", kind: .primary, used: 0.8, resetsAt: now.addingTimeInterval(-60)),
+            UsageWindow(id: "weekly", label: "", kind: .primary, used: 0.4, resetsAt: now.addingTimeInterval(3600)),
+        ])
+        #expect(StatusBarController.ringValues([.claude: claude], enabled: [.claude], now: now) == .init(session: nil, weekly: 0.4))
+
+        claude.error = "Sign-in expired"
+        #expect(StatusBarController.ringValues([.claude: claude], enabled: [.claude], now: now).stale)
+        claude.transient = true
+        #expect(!StatusBarController.ringValues([.claude: claude], enabled: [.claude], now: now).stale)
     }
 
     @Test func `codex windows without lengths fall back to slot order`() {
