@@ -15,7 +15,7 @@
 ## Later
 - [x] Expired sign-in: dimmed rings + badge, notification, Fix button, no stale numbers past reset
 - [x] Opt-in auto-renew, refresh at token expiry
-- [ ] Fix is unreliable: `claude auth status` doesn't renew by itself. Decide on a fallback (open Terminal with `claude`)
+- [x] Fix is unreliable (`claude auth status` doesn't renew by itself): Open Terminal fallback runs `claude`
 - [ ] Check `codex login status` on a real Codex expiry (unverified)
 - [x] Provider order in panel (drag or right-click in Settings)
 - [x] Menu bar: icon, highest usage, or one provider

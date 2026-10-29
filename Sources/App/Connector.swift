@@ -59,15 +59,40 @@ final class Connector {
         }
         await refresher.refreshAfterCurrent(id)
         guard refresher.states[id]?.needsSignIn != true else {
-            renewFailures[id] = ("Still expired. Open Terminal and run \(command.cli).", .now)
+            renewFailures[id] = ("Still expired. Open Terminal to run \(command.cli), then quit it with /exit.", .now)
             return false
         }
         return true
     }
 
-    /// A failure says nothing once any later refresh has run: that one may have fixed it.
-    func renewFailure(_ id: ProviderID, lastAttempt: Date?) -> String? {
-        guard let failure = renewFailures[id], failure.at >= lastAttempt ?? .distantPast else { return nil }
+    /// Stale once a later fetch succeeded: the sign-in worked again since.
+    func renewFailure(_ id: ProviderID, lastSuccess: Date?) -> String? {
+        guard let failure = renewFailures[id], failure.at >= lastSuccess ?? .distantPast else { return nil }
         return failure.message
+    }
+
+    /// Fallback when the status command didn't renew: a real CLI session does. Then checks
+    /// every 15 s for two minutes, so the alert clears soon after, despite failure backoff.
+    func openTerminal(_ id: ProviderID) {
+        guard let command = Self.statusCommands[id], let cli = Executable.path(command.cli), !renewing.contains(id) else { return }
+        // A .command file opens in Terminal without the Automation permission scripting it needs.
+        let script = FileManager.default.temporaryDirectory.appending(path: "tokei-\(command.cli).command")
+        do {
+            try "#!/bin/zsh -l\ncd ~\nexec '\(cli.path)'\n".write(to: script, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        } catch {
+            renewFailures[id] = ("Couldn't open Terminal: \(error.localizedDescription)", .now)
+            return
+        }
+        NSWorkspace.shared.open(script)
+        renewing.insert(id)
+        Task {
+            defer { renewing.remove(id) }
+            for _ in 0 ..< 8 {
+                try? await Task.sleep(for: .seconds(15))
+                await refresher.refreshAfterCurrent(id)
+                if refresher.states[id]?.needsSignIn != true { return }
+            }
+        }
     }
 }

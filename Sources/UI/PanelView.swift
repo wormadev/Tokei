@@ -87,6 +87,8 @@ struct ProviderCard: View {
     @AppStorage(Prefs.showHistoryKey) private var showHistory = false
     @AppStorage(Prefs.showStatusKey) private var showStatus = true
 
+    private var failure: String? { connector.renewFailure(id, lastSuccess: state.snapshot?.fetchedAt) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             title
@@ -144,6 +146,11 @@ struct ProviderCard: View {
                         Spacer(minLength: 0)
                         if connector.renewing.contains(id) {
                             ProgressView().controlSize(.mini)
+                        } else if failure != nil {
+                            Button("Open Terminal") { connector.openTerminal(id) }
+                                .buttonStyle(.borderless)
+                                .foregroundStyle(.tint)
+                                .help("Runs `\(command.cli)` in Terminal, which renews the sign-in")
                         } else {
                             Button("Fix") { Task { await connector.renewSignIn(id) } }
                                 .buttonStyle(.borderless)
@@ -153,7 +160,7 @@ struct ProviderCard: View {
                     }
                 }
                 .font(.caption)
-                if let failure = connector.renewFailure(id, lastAttempt: state.lastAttempt) {
+                if let failure {
                     Text(failure).font(.caption).foregroundStyle(.secondary)
                 }
             }
