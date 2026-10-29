@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 @testable import Tokei
 import Testing
 
@@ -8,6 +9,18 @@ private struct StubProvider: UsageProvider {
     var activityFolder: URL { URL.temporaryDirectory }
     func isInstalled() -> Bool { installed }
     func fetch() async throws -> Snapshot { throw ProviderError.http(500) }
+}
+
+private final class CountingProvider: UsageProvider, Sendable {
+    let id = ProviderID.claude
+    let fetches = Mutex(0)
+    var activityFolder: URL { URL.temporaryDirectory }
+    func isInstalled() -> Bool { true }
+    func fetch() async throws -> Snapshot {
+        fetches.withLock { $0 += 1 }
+        try await Task.sleep(for: .milliseconds(100))
+        throw ProviderError.http(500)
+    }
 }
 
 private func snapshot(used: Double, at date: Date) -> Snapshot {
@@ -97,6 +110,23 @@ struct RefresherTests {
         refresher.apply(.failure(ProviderError.notConfigured("Sign in")), to: .claude, now: .now)
         #expect(refresher.states[.claude]?.needsSignIn == true)
         #expect(notified == 0)
+    }
+
+    @Test func `a second refresh joins the one under way, refresh after current starts anew`() async {
+        let provider = CountingProvider()
+        let store = StateStore(url: URL.temporaryDirectory.appending(path: "tokei-test-\(UUID().uuidString).json"))
+        let refresher = Refresher(providers: [provider], store: store)
+        async let first: Void = refresher.refresh(.claude)
+        async let second: Void = refresher.refresh(.claude)
+        _ = await (first, second)
+        #expect(provider.fetches.withLock { $0 } == 1)
+
+        let background = Task { await refresher.refresh(.claude) }
+        await Task.yield()
+        await refresher.refreshAfterCurrent(.claude)
+        await background.value
+        #expect(provider.fetches.withLock { $0 } == 3)
+        #expect(refresher.refreshing.isEmpty)
     }
 
     @Test func `providers that are not installed are left out of the panel`() {

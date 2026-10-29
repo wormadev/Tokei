@@ -5,8 +5,10 @@ import Observation
 @MainActor
 @Observable
 final class Connector {
-    /// Outcome of the last banked reset or sign-in renewal, shown on the card.
+    /// Outcome of the last banked reset, shown on the card.
     private(set) var notices: [ProviderID: String] = [:]
+    /// Why the last sign-in renewal failed, and when.
+    private(set) var renewFailures: [ProviderID: (message: String, at: Date)] = [:]
     private(set) var redeeming: Set<ProviderID> = []
     private(set) var renewing: Set<ProviderID> = []
 
@@ -27,7 +29,7 @@ final class Connector {
             } catch {
                 notices[id] = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }
-            await refresher.refresh(id)
+            await refresher.refreshAfterCurrent(id)
         }
     }
 
@@ -43,23 +45,29 @@ final class Connector {
     func renewSignIn(_ id: ProviderID) async -> Bool {
         guard let command = Self.statusCommands[id], !renewing.contains(id) else { return false }
         guard let cli = Executable.path(command.cli) else {
-            notices[id] = "Couldn't find \(command.cli). Run it in Terminal."
+            renewFailures[id] = ("Couldn't find \(command.cli). Run it in Terminal.", .now)
             return false
         }
         renewing.insert(id)
-        notices[id] = nil
+        renewFailures[id] = nil
         defer { renewing.remove(id) }
         do {
             try await Executable.run(cli, command.arguments)
         } catch {
-            notices[id] = "Couldn't run \(command.cli): \(error.localizedDescription)"
+            renewFailures[id] = ("Couldn't run \(command.cli): \(error.localizedDescription)", .now)
             return false
         }
-        await refresher.refresh(id)
+        await refresher.refreshAfterCurrent(id)
         guard refresher.states[id]?.needsSignIn != true else {
-            notices[id] = "Still expired. Open Terminal and run \(command.cli)."
+            renewFailures[id] = ("Still expired. Open Terminal and run \(command.cli).", .now)
             return false
         }
         return true
+    }
+
+    /// A failure says nothing once any later refresh has run: that one may have fixed it.
+    func renewFailure(_ id: ProviderID, lastAttempt: Date?) -> String? {
+        guard let failure = renewFailures[id], failure.at >= lastAttempt ?? .distantPast else { return nil }
+        return failure.message
     }
 }

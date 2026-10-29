@@ -153,6 +153,9 @@ struct ProviderCard: View {
                     }
                 }
                 .font(.caption)
+                if let failure = connector.renewFailure(id, lastAttempt: state.lastAttempt) {
+                    Text(failure).font(.caption).foregroundStyle(.secondary)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

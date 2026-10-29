@@ -167,7 +167,7 @@ private struct GeneralSettings: View {
             Section {
                 Toggle("Renew expired sign-ins", isOn: $renewSignIn)
             } footer: {
-                Text("Runs `claude auth status` or `codex login status` when a sign-in expires, so the CLI renews its own token. You're notified only if that fails.")
+                Text("Runs `claude auth status` or `codex login status` when a sign-in expires. That often lets the CLI renew its own token. You're notified only if it doesn't.")
             }
             Section {
                 Toggle("Weekly", isOn: $menuBarWeekly)

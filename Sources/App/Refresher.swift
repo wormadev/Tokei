@@ -35,6 +35,7 @@ final class Refresher {
     @ObservationIgnored private let providers: [ProviderID: any UsageProvider]
     @ObservationIgnored private let store: StateStore
     @ObservationIgnored private var loop: Task<Void, Never>?
+    @ObservationIgnored private var running: [ProviderID: Task<Void, Never>] = [:]
     /// Separate flags: waking usually lands on the lock screen, which must stay paused.
     @ObservationIgnored private let activity = AgentActivity()
     @ObservationIgnored private var asleep = false
@@ -120,21 +121,33 @@ final class Refresher {
         return now.timeIntervalSince(last) >= interval
     }
 
+    /// Joins a refresh already under way instead of starting a second one.
     func refresh(_ id: ProviderID) async {
-        guard let provider = providers[id], !refreshing.contains(id) else { return }
+        if let running = running[id] { return await running.value }
+        guard let provider = providers[id] else { return }
         refreshing.insert(id)
-        defer { refreshing.remove(id) }
-        async let status: Void = refreshStatus(id)
-        let result: Result<Snapshot, Error>
-        do {
-            result = try .success(await provider.fetch())
-        } catch {
-            result = .failure(error)
+        let task = Task {
+            async let status: Void = refreshStatus(id)
+            let result: Result<Snapshot, Error>
+            do {
+                result = try .success(await provider.fetch())
+            } catch {
+                result = .failure(error)
+            }
+            apply(result, to: id, now: .now)
+            await status
+            // Inside the task, so anyone awaiting it finds the slot free for a new refresh.
+            running[id] = nil
+            refreshing.remove(id)
         }
-        await status
-        // Last, with no await after it: callbacks may start another refresh of this provider,
-        // which `refreshing` would otherwise turn away.
-        apply(result, to: id, now: .now)
+        running[id] = task
+        await task.value
+    }
+
+    /// For when the credentials just changed: a refresh already under way read the old ones.
+    func refreshAfterCurrent(_ id: ProviderID) async {
+        await running[id]?.value
+        await refresh(id)
     }
 
     /// An unreachable status page clears the badge rather than leaving an old incident up.
