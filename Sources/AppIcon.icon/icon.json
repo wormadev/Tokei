@@ -24,12 +24,6 @@
               "value": {
                 "automatic-gradient": "srgb:0.19608,0.67843,0.90196,1.00000"
               }
-            },
-            {
-              "appearance": "dark",
-              "value": {
-                "solid": "srgb:1.00000,1.00000,1.00000,1.00000"
-              }
             }
           ]
         }
@@ -51,12 +45,6 @@
           "name": "used",
           "fill-specializations": [
             {
-              "value": {
-                "automatic-gradient": "srgb:0.19608,0.67843,0.90196,1.00000"
-              }
-            },
-            {
-              "appearance": "dark",
               "value": {
                 "automatic-gradient": "srgb:0.19608,0.67843,0.90196,1.00000"
               }
@@ -84,21 +72,11 @@
               "value": {
                 "automatic-gradient": "srgb:0.19608,0.67843,0.90196,1.00000"
               }
-            },
-            {
-              "appearance": "dark",
-              "value": {
-                "solid": "srgb:1.00000,1.00000,1.00000,1.00000"
-              }
             }
           ],
           "opacity-specializations": [
             {
               "value": 0.35
-            },
-            {
-              "appearance": "dark",
-              "value": 0.2
             }
           ]
         }
