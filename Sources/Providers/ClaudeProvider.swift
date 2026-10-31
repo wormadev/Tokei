@@ -314,12 +314,15 @@ struct ClaudeProvider: UsageProvider {
         }
     }
 
-    /// "max" + "default_claude_max_20x" -> "Max 20x".
+    /// Oct 2026 rename: Max 5x is "Max", Max 20x is "Ultra". Tokens still carry the old tier ids,
+    /// so "max" + "default_claude_max_20x" -> "Ultra".
     static func plan(subscription: String?, tier: String?) -> String? {
         guard let base = subscription ?? tier else { return nil }
+        let ids = [subscription, tier].compactMap { $0?.lowercased() }
+        if ids.contains(where: { $0.contains("ultra") || $0.hasSuffix("max_20x") }) { return "Ultra" }
         let names = ["max": "Max", "pro": "Pro", "team": "Team", "enterprise": "Enterprise"]
         let name = names.first { base.lowercased().contains($0.key) }?.value ?? base.capitalized
-        let multiplier = tier?.split(separator: "_").last.flatMap { $0.hasSuffix("x") && Int($0.dropLast()) != nil ? String($0) : nil }
+        let multiplier = name == "Max" ? nil : tier?.split(separator: "_").last.flatMap { $0.hasSuffix("x") && Int($0.dropLast()) != nil ? String($0) : nil }
         return [name, multiplier].compactMap(\.self).joined(separator: " ")
     }
 }

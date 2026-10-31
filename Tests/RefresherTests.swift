@@ -244,7 +244,7 @@ struct MenuRingsTests {
             .codex: state([UsageWindow(id: "weekly", label: "", kind: .primary, used: 0.7)]),
         ]
         #expect(StatusBarController.ringValues(states, enabled: [.claude, .codex]) == .init(session: 0.13, weekly: 0.43))
-        #expect(StatusBarController.ringValues(states, enabled: [.codex, .claude]) == .init(session: nil, weekly: 0.7))
+        #expect(StatusBarController.ringValues(states, enabled: [.codex, .claude]) == .init(session: nil, weekly: 0.7, noSession: true))
         #expect(StatusBarController.ringValues(states, enabled: []) == .init(session: nil, weekly: nil))
     }
 
@@ -284,6 +284,14 @@ struct PrefsTests {
         #expect(StatusBarController.menuLines(rings, weekly: false, session: true, display: .remaining) == ["87%"])
         #expect(StatusBarController.menuLines(rings, weekly: false, session: false, display: .used).isEmpty)
         #expect(StatusBarController.menuLines(.init(session: nil, weekly: 0.5), weekly: true, session: true, display: .used) == ["50%"])
+    }
+
+    @Test func `plans without a session limit show weekly in the session slot`() {
+        let weeklyOnly = StatusBarController.Rings(session: nil, weekly: 0.46, noSession: true)
+        #expect(StatusBarController.menuLines(weeklyOnly, weekly: false, session: true, display: .used) == ["46%"])
+        #expect(StatusBarController.menuLines(weeklyOnly, weekly: false, session: false, display: .used).isEmpty)
+        let sessionReset = StatusBarController.Rings(session: nil, weekly: 0.46)
+        #expect(StatusBarController.menuLines(sessionReset, weekly: false, session: true, display: .used).isEmpty)
     }
 
     @Test func `provider order keeps saved order and appends missing providers`() {

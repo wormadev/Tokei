@@ -23,7 +23,7 @@ struct ClaudeParsingTests {
         #expect(snapshot.windows[0].used == 0.42)
         #expect(snapshot.windows[0].resetsAt != nil)
         #expect(snapshot.windows[2].kind == .secondary)
-        #expect(snapshot.account == Account(user: "a@b.c", plan: "Max 20x"))
+        #expect(snapshot.account == Account(user: "a@b.c", plan: "Ultra"))
         #expect(snapshot.details.first?.label == "Extra usage")
     }
 
@@ -58,6 +58,12 @@ struct ClaudeParsingTests {
     @Test func `plan name without multiplier`() {
         #expect(ClaudeProvider.plan(subscription: "pro", tier: "default_claude_pro") == "Pro")
         #expect(ClaudeProvider.plan(subscription: nil, tier: nil) == nil)
+    }
+
+    @Test func `max tiers use the new plan names`() {
+        #expect(ClaudeProvider.plan(subscription: "max", tier: "default_claude_max_5x") == "Max")
+        #expect(ClaudeProvider.plan(subscription: "max", tier: "default_claude_max_20x") == "Ultra")
+        #expect(ClaudeProvider.plan(subscription: "ultra", tier: nil) == "Ultra")
     }
 }
 

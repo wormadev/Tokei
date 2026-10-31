@@ -112,11 +112,11 @@ final class StatusBarController: NSObject {
     }
 
     /// Session above weekly, like the inner ring sits inside the outer one. Unknown values
-    /// are left out.
+    /// are left out. Plans without a session limit (Claude Ultra) show weekly in its place.
     nonisolated static func menuLines(_ rings: Rings, weekly: Bool, session: Bool, display: UsageDisplay) -> [String] {
         [
             session ? rings.session.map(display.text) : nil,
-            weekly ? rings.weekly.map(display.text) : nil,
+            weekly || (session && rings.noSession) ? rings.weekly.map(display.text) : nil,
         ].compactMap(\.self)
     }
 
@@ -126,6 +126,8 @@ final class StatusBarController: NSObject {
         var weekly: Double?
         /// The provider can't refresh until the user signs in again, so these numbers are old.
         var stale = false
+        /// The plan has a weekly limit but no session limit (Claude Ultra).
+        var noSession = false
     }
 
     /// Session and weekly usage of the first provider in panel order: the one the rings show.
@@ -136,12 +138,13 @@ final class StatusBarController: NSObject {
         let session = primary.first { $0.id == "session" } ?? primary.first { $0.id != "weekly" }
         let weekly = primary.first { $0.id == "weekly" } ?? primary.first { $0.id != session?.id }
         let used = { (window: UsageWindow?) in window.flatMap { $0.hasReset(now: now) ? nil : $0.used } }
-        return Rings(session: used(session), weekly: used(weekly), stale: state?.needsSignIn == true)
+        return Rings(session: used(session), weekly: used(weekly), stale: state?.needsSignIn == true, noSession: session == nil && weekly != nil)
     }
 
     /// Rings plus an optional number column, drawn as one template image so it follows the
     /// menu bar's appearance. Outer ring = weekly, inner = 5h session; faint tracks keep the
     /// mark recognizable at 0%. Stale numbers are dimmed; the badge dot means a sign-in needs the user.
+    /// No session limit: the app icon's spark sits inside the weekly ring.
     static func statusImage(_ rings: Rings, lines: [String], display: UsageDisplay, badge: Bool = false) -> NSImage {
         let ink = NSColor.black.withAlphaComponent(rings.stale ? 0.4 : 1)
         // Full menu bar height so stacked numbers aren't squeezed into the rings' 18 pt.
@@ -152,7 +155,12 @@ final class StatusBarController: NSObject {
         let width = 18 + (lines.isEmpty ? 0 : 4 + ceil(textWidth))
         let image = NSImage(size: NSSize(width: width, height: height), flipped: false) { _ in
             let center = NSPoint(x: 9, y: height / 2)
-            for (radius, used) in [(7.0, rings.weekly), (3.6, rings.session)] {
+            let sparkOnly = rings.noSession
+            if sparkOnly {
+                ink.setFill()
+                spark(at: center, radius: 4.4).fill()
+            }
+            for (radius, used) in [(7.0, rings.weekly), (3.6, rings.session)] where !(sparkOnly && radius < 7) {
                 let track = NSBezierPath()
                 track.appendArc(withCenter: center, radius: radius, startAngle: 0, endAngle: 360)
                 track.lineWidth = 2.2
@@ -191,9 +199,30 @@ final class StatusBarController: NSObject {
         image.isTemplate = true
         let describe = { (used: Double?) in used.map(display.text) ?? "unknown" }
         let mode = display == .used ? "used" : "left"
-        image.accessibilityDescription = "Tokei: session \(describe(rings.session)) \(mode), weekly \(describe(rings.weekly)) \(mode)"
+        let session = rings.noSession ? "" : "session \(describe(rings.session)) \(mode), "
+        image.accessibilityDescription = "Tokei: \(session)weekly \(describe(rings.weekly)) \(mode)"
             + (badge ? ". Sign-in needed" : "")
         return image
+    }
+
+    /// Four-point star from Sources/AppIcon.icon/Assets/spark.svg: curves pulled 30% toward the center.
+    private static func spark(at center: NSPoint, radius r: CGFloat) -> NSBezierPath {
+        let point = { (x: CGFloat, y: CGFloat) in NSPoint(x: center.x + x * r, y: center.y + y * r) }
+        let tips: [(CGFloat, CGFloat)] = [(0, 1), (1, 0), (0, -1), (-1, 0)]
+        let path = NSBezierPath()
+        path.move(to: point(0, 1))
+        for (index, tip) in tips.enumerated() {
+            let next = tips[(index + 1) % tips.count]
+            // The SVG's quadratic control point, raised to cubic: 2/3 of the way from each end.
+            let control = ((tip.0 + next.0) * 0.3, (tip.1 + next.1) * 0.3)
+            path.curve(
+                to: point(next.0, next.1),
+                controlPoint1: point(tip.0 + (control.0 - tip.0) * 2 / 3, tip.1 + (control.1 - tip.1) * 2 / 3),
+                controlPoint2: point(next.0 + (control.0 - next.0) * 2 / 3, next.1 + (control.1 - next.1) * 2 / 3)
+            )
+        }
+        path.close()
+        return path
     }
 }
 
