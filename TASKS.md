@@ -13,6 +13,10 @@
 - [x] Review fixes: Claude Connect/Keychain loss, multi-display panel, sleep vs lock, sign-out clears data, Gemini write-back race, Copilot save/cancel
 
 ## Later
+- [x] Expired sign-in: dimmed rings + badge, notification, Fix button, no stale numbers past reset
+- [x] Opt-in auto-renew, refresh at token expiry
+- [x] Fix is unreliable (`claude auth status` doesn't renew by itself): Open Terminal fallback runs `claude`
+- [ ] Check `codex login status` on a real Codex expiry (unverified)
 - [x] Provider order in panel (drag or right-click in Settings)
 - [x] Menu bar: icon, highest usage, or one provider
 - [ ] Codex: optional token refresh with write-back to auth.json (CodexBar avoids it; risk of stranding a running CLI)

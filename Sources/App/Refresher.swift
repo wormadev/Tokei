@@ -12,6 +12,9 @@ struct ProviderState: Codable, Equatable {
     var lastAttempt: Date?
     /// Earliest next background attempt after a failure or 429.
     var retryAt: Date?
+
+    /// Only the user can fix this one, so the menu bar flags it.
+    var needsSignIn: Bool { error != nil && transient != true }
 }
 
 /// Owns all fetching. One 30 s tick decides who is due, so there is a single timer, it can
@@ -28,9 +31,11 @@ final class Refresher {
     private(set) var statuses: [ProviderID: ServiceStatus] = [:]
 
     @ObservationIgnored var onReset: ((ProviderID, UsageWindow) -> Void)?
+    @ObservationIgnored var onSignInExpired: ((ProviderID, String) -> Void)?
     @ObservationIgnored private let providers: [ProviderID: any UsageProvider]
     @ObservationIgnored private let store: StateStore
     @ObservationIgnored private var loop: Task<Void, Never>?
+    @ObservationIgnored private var running: [ProviderID: Task<Void, Never>] = [:]
     /// Separate flags: waking usually lands on the lock screen, which must stay paused.
     @ObservationIgnored private let activity = AgentActivity()
     @ObservationIgnored private var asleep = false
@@ -111,23 +116,38 @@ final class Refresher {
         guard let state = states[id], let last = state.lastAttempt else { return true }
         // "Only when opened": no background refresh after the first fetch.
         guard let interval else { return false }
+        if let expiry = state.snapshot?.signInExpiresAt, expiry <= now, last < expiry { return true }
         if let retryAt = state.retryAt { return now >= retryAt }
         return now.timeIntervalSince(last) >= interval
     }
 
+    /// Joins a refresh already under way instead of starting a second one.
     func refresh(_ id: ProviderID) async {
-        guard let provider = providers[id], !refreshing.contains(id) else { return }
+        if let running = running[id] { return await running.value }
+        guard let provider = providers[id] else { return }
         refreshing.insert(id)
-        defer { refreshing.remove(id) }
-        async let status: Void = refreshStatus(id)
-        let result: Result<Snapshot, Error>
-        do {
-            result = try .success(await provider.fetch())
-        } catch {
-            result = .failure(error)
+        let task = Task {
+            async let status: Void = refreshStatus(id)
+            let result: Result<Snapshot, Error>
+            do {
+                result = try .success(await provider.fetch())
+            } catch {
+                result = .failure(error)
+            }
+            apply(result, to: id, now: .now)
+            await status
+            // Inside the task, so anyone awaiting it finds the slot free for a new refresh.
+            running[id] = nil
+            refreshing.remove(id)
         }
-        apply(result, to: id, now: .now)
-        await status
+        running[id] = task
+        await task.value
+    }
+
+    /// For when the credentials just changed: a refresh already under way read the old ones.
+    func refreshAfterCurrent(_ id: ProviderID) async {
+        await running[id]?.value
+        await refresh(id)
     }
 
     /// An unreachable status page clears the badge rather than leaving an old incident up.
@@ -145,6 +165,7 @@ final class Refresher {
 
     func apply(_ result: Result<Snapshot, Error>, to id: ProviderID, now: Date) {
         var state = states[id] ?? ProviderState()
+        let neededSignIn = state.needsSignIn
         state.lastAttempt = now
         switch result {
         case let .success(snapshot):
@@ -163,10 +184,14 @@ final class Refresher {
             case .notConfigured?: state.snapshot = nil
             default: break
             }
-            state.transient = Self.isTransient(error) ? true : nil
             state.failures += 1
-            state.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            // A 429 after a rejected sign-in changes nothing: the sign-in still needs the user.
+            if !(neededSignIn && Self.isTransient(error)) {
+                state.transient = Self.isTransient(error) ? true : nil
+                state.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
             state.retryAt = now.addingTimeInterval(Self.backoff(error: error, failures: state.failures))
+            if case .unauthorized(let hint)? = error as? ProviderError, !neededSignIn { onSignInExpired?(id, hint) }
         }
         states[id] = state
         store.save(.init(states: states, history: history))

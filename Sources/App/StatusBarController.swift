@@ -36,6 +36,10 @@ final class StatusBarController: NSObject {
         NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.update() }
         }
+        // Reset times pass without any state change.
+        Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.update() }
+        }
     }
 
     private var itemFrame: NSRect? {
@@ -93,16 +97,18 @@ final class StatusBarController: NSObject {
             session: UserDefaults.standard.bool(forKey: Prefs.menuBarSessionKey),
             display: display
         )
-        let shown = Shown(rings: rings, lines: lines, display: display)
+        let badge = refresher.enabled.contains { refresher.states[$0]?.needsSignIn == true }
+        let shown = Shown(rings: rings, lines: lines, display: display, badge: badge)
         guard shown != self.shown || item.button?.image == nil else { return }
         self.shown = shown
-        item.button?.image = Self.statusImage(rings, lines: lines, display: display)
+        item.button?.image = Self.statusImage(rings, lines: lines, display: display, badge: badge)
     }
 
     private struct Shown: Equatable {
         var rings: Rings
         var lines: [String]
         var display: UsageDisplay
+        var badge: Bool
     }
 
     /// Session above weekly, like the inner ring sits inside the outer one. Unknown values
@@ -118,25 +124,30 @@ final class StatusBarController: NSObject {
         /// 0...1 or nil when unknown; drawn as track only.
         var session: Double?
         var weekly: Double?
+        /// The provider can't refresh until the user signs in again, so these numbers are old.
+        var stale = false
     }
 
     /// Session and weekly usage of the first provider in panel order: the one the rings show.
-    nonisolated static func ringValues(_ states: [ProviderID: ProviderState], enabled: [ProviderID]) -> Rings {
-        let primary = enabled.first.flatMap { states[$0]?.snapshot }?.windows.filter { $0.kind == .primary } ?? []
+    nonisolated static func ringValues(_ states: [ProviderID: ProviderState], enabled: [ProviderID], now: Date = .now) -> Rings {
+        let state = enabled.first.flatMap { states[$0] }
+        let primary = state?.snapshot?.windows.filter { $0.kind == .primary } ?? []
         // Codex labels windows by length; when lengths are missing they fall back to slot order.
         let session = primary.first { $0.id == "session" } ?? primary.first { $0.id != "weekly" }
         let weekly = primary.first { $0.id == "weekly" } ?? primary.first { $0.id != session?.id }
-        return Rings(session: session?.used, weekly: weekly?.used)
+        let used = { (window: UsageWindow?) in window.flatMap { $0.hasReset(now: now) ? nil : $0.used } }
+        return Rings(session: used(session), weekly: used(weekly), stale: state?.needsSignIn == true)
     }
 
     /// Rings plus an optional number column, drawn as one template image so it follows the
     /// menu bar's appearance. Outer ring = weekly, inner = 5h session; faint tracks keep the
-    /// mark recognizable at 0%.
-    static func statusImage(_ rings: Rings, lines: [String], display: UsageDisplay) -> NSImage {
+    /// mark recognizable at 0%. Stale numbers are dimmed; the badge dot means a sign-in needs the user.
+    static func statusImage(_ rings: Rings, lines: [String], display: UsageDisplay, badge: Bool = false) -> NSImage {
+        let ink = NSColor.black.withAlphaComponent(rings.stale ? 0.4 : 1)
         // Full menu bar height so stacked numbers aren't squeezed into the rings' 18 pt.
         let height: CGFloat = 22
         let font = NSFont.monospacedDigitSystemFont(ofSize: lines.count > 1 ? 11 : 13, weight: .semibold)
-        let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.black]
+        let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: ink]
         let textWidth = lines.map { ($0 as NSString).size(withAttributes: attributes).width }.max() ?? 0
         let width = 18 + (lines.isEmpty ? 0 : 4 + ceil(textWidth))
         let image = NSImage(size: NSSize(width: width, height: height), flipped: false) { _ in
@@ -145,7 +156,7 @@ final class StatusBarController: NSObject {
                 let track = NSBezierPath()
                 track.appendArc(withCenter: center, radius: radius, startAngle: 0, endAngle: 360)
                 track.lineWidth = 2.2
-                NSColor.black.withAlphaComponent(0.3).setStroke()
+                ink.withAlphaComponent(ink.alphaComponent * 0.3).setStroke()
                 track.stroke()
                 guard let used else { continue }
                 let value = display.value(used)
@@ -155,7 +166,7 @@ final class StatusBarController: NSObject {
                 arc.appendArc(withCenter: center, radius: radius, startAngle: 90, endAngle: 90 - sweep, clockwise: true)
                 arc.lineWidth = 2.2
                 arc.lineCapStyle = sweep >= 360 ? .butt : .round
-                NSColor.black.setStroke()
+                ink.setStroke()
                 arc.stroke()
             }
             // Lay digits out by cap height so the block is optically centered.
@@ -165,12 +176,23 @@ final class StatusBarController: NSObject {
                 let baseline = (height + block) / 2 - font.capHeight - CGFloat(index) * (font.capHeight + gap)
                 (line as NSString).draw(at: NSPoint(x: 22, y: baseline + font.descender), withAttributes: attributes)
             }
+            if badge {
+                // Cut a gap into the rings so the dot reads as a separate mark.
+                let dot = NSPoint(x: 14.5, y: 16.5)
+                let circle = { (radius: CGFloat) in NSBezierPath(ovalIn: NSRect(x: dot.x - radius, y: dot.y - radius, width: radius * 2, height: radius * 2)) }
+                NSGraphicsContext.current?.compositingOperation = .clear
+                circle(4).fill()
+                NSGraphicsContext.current?.compositingOperation = .sourceOver
+                NSColor.black.setFill()
+                circle(2.7).fill()
+            }
             return true
         }
         image.isTemplate = true
         let describe = { (used: Double?) in used.map(display.text) ?? "unknown" }
         let mode = display == .used ? "used" : "left"
         image.accessibilityDescription = "Tokei: session \(describe(rings.session)) \(mode), weekly \(describe(rings.weekly)) \(mode)"
+            + (badge ? ". Sign-in needed" : "")
         return image
     }
 }

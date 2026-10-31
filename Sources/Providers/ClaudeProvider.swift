@@ -50,6 +50,13 @@ struct ClaudeProvider: UsageProvider {
         throw ProviderError.notConfigured("Run `claude` and sign in.")
     }
 
+    #if DEBUG
+    /// `-debugExpiredSignIn YES`: acts as if the token expired, to test the sign-in alert.
+    private static var debugExpired: Bool { UserDefaults.standard.bool(forKey: "debugExpiredSignIn") }
+    #else
+    private static let debugExpired = false
+    #endif
+
     var activityFolder: URL {
         Self.credentialsFile.deletingLastPathComponent().appending(path: "projects")
     }
@@ -62,7 +69,7 @@ struct ClaudeProvider: UsageProvider {
     func fetch() async throws -> Snapshot {
         let credentials = try Self.resolveCredentials()
         guard let oauth = credentials.claudeAiOauth else { throw ProviderError.notConfigured("Run `claude` and sign in.") }
-        if credentials.isExpired {
+        if credentials.isExpired || Self.debugExpired {
             throw ProviderError.unauthorized("Sign-in expired. Run `claude` once to refresh it.")
         }
         let headers = Self.requestHeaders(token: oauth.accessToken)
@@ -86,7 +93,9 @@ struct ClaudeProvider: UsageProvider {
             )
             if let profile { Self.profiles.withLock { $0 = [oauth.accessToken: profile] } }
         }
-        return Self.snapshot(usage: usage, profile: profile, oauth: oauth)
+        var snapshot = Self.snapshot(usage: usage, profile: profile, oauth: oauth)
+        snapshot.signInExpiresAt = oauth.expiresAt.map { Date(timeIntervalSince1970: $0 / 1000) }
+        return snapshot
     }
 
     // MARK: - Parsing

@@ -34,7 +34,8 @@ struct CodexProvider: UsageProvider {
         else {
             throw ProviderError.notConfigured("Run `codex login` to sign in.")
         }
-        if let exp = JWT(tokens.access_token)?.expiresAt, exp <= .now {
+        let expiresAt = JWT(tokens.access_token)?.expiresAt
+        if let expiresAt, expiresAt <= .now {
             throw ProviderError.unauthorized("Sign-in expired. Run `codex` once to refresh it.")
         }
         var headers = [
@@ -54,6 +55,7 @@ struct CodexProvider: UsageProvider {
         )
         var snapshot = Self.snapshot(usage: usage, idToken: tokens.id_token)
         snapshot.banked = Self.banked(credits)
+        snapshot.signInExpiresAt = expiresAt
         return snapshot
     }
 

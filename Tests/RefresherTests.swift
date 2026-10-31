@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 @testable import Tokei
 import Testing
 
@@ -8,6 +9,18 @@ private struct StubProvider: UsageProvider {
     var activityFolder: URL { URL.temporaryDirectory }
     func isInstalled() -> Bool { installed }
     func fetch() async throws -> Snapshot { throw ProviderError.http(500) }
+}
+
+private final class CountingProvider: UsageProvider, Sendable {
+    let id = ProviderID.claude
+    let fetches = Mutex(0)
+    var activityFolder: URL { URL.temporaryDirectory }
+    func isInstalled() -> Bool { true }
+    func fetch() async throws -> Snapshot {
+        fetches.withLock { $0 += 1 }
+        try await Task.sleep(for: .milliseconds(100))
+        throw ProviderError.http(500)
+    }
 }
 
 private func snapshot(used: Double, at date: Date) -> Snapshot {
@@ -43,6 +56,77 @@ struct RefresherTests {
 
         refresher.clear(.claude)
         #expect(refresher.states[.claude] == nil)
+    }
+
+    @Test func `an expired sign-in notifies once and needs the user, a server error does neither`() {
+        let refresher = makeRefresher()
+        var notified: [String] = []
+        refresher.onSignInExpired = { notified.append($1) }
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        refresher.apply(.success(snapshot(used: 0.3, at: now)), to: .claude, now: now)
+        refresher.apply(.failure(ProviderError.http(502)), to: .claude, now: now)
+        #expect(refresher.states[.claude]?.needsSignIn == false)
+
+        refresher.apply(.failure(ProviderError.unauthorized("Run `claude`")), to: .claude, now: now)
+        refresher.apply(.failure(ProviderError.unauthorized("Run `claude`")), to: .claude, now: now)
+        #expect(refresher.states[.claude]?.needsSignIn == true)
+        #expect(notified == ["Run `claude`"])
+
+        refresher.apply(.success(snapshot(used: 0.3, at: now)), to: .claude, now: now)
+        #expect(refresher.states[.claude]?.needsSignIn == false)
+        refresher.apply(.failure(ProviderError.unauthorized("Run `claude`")), to: .claude, now: now)
+        #expect(notified.count == 2)
+    }
+
+    @Test func `a rate limit after a rejected sign-in keeps the sign-in alert`() {
+        let refresher = makeRefresher()
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        refresher.apply(.failure(ProviderError.unauthorized("Run `claude`")), to: .claude, now: now)
+        refresher.apply(.failure(ProviderError.rateLimited(retryAfter: 3600)), to: .claude, now: now)
+        let state = refresher.states[.claude]
+        #expect(state?.needsSignIn == true)
+        #expect(state?.error == "Run `claude`")
+        #expect(state?.retryAt == now.addingTimeInterval(3600))
+    }
+
+    @Test func `due right when the sign-in expires, once`() {
+        let refresher = makeRefresher()
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        var fresh = snapshot(used: 0.1, at: now)
+        fresh.signInExpiresAt = now.addingTimeInterval(60)
+        refresher.apply(.success(fresh), to: .claude, now: now)
+        #expect(!refresher.isDue(.claude, now: now.addingTimeInterval(59), interval: 900))
+        #expect(refresher.isDue(.claude, now: now.addingTimeInterval(61), interval: 900))
+        #expect(!refresher.isDue(.claude, now: now.addingTimeInterval(61), interval: nil))
+
+        refresher.apply(.failure(ProviderError.unauthorized("Run `claude`")), to: .claude, now: now.addingTimeInterval(61))
+        #expect(!refresher.isDue(.claude, now: now.addingTimeInterval(120), interval: 900))
+    }
+
+    @Test func `a missing sign-in needs the user without an expiry notification`() {
+        let refresher = makeRefresher()
+        var notified = 0
+        refresher.onSignInExpired = { _, _ in notified += 1 }
+        refresher.apply(.failure(ProviderError.notConfigured("Sign in")), to: .claude, now: .now)
+        #expect(refresher.states[.claude]?.needsSignIn == true)
+        #expect(notified == 0)
+    }
+
+    @Test func `a second refresh joins the one under way, refresh after current starts anew`() async {
+        let provider = CountingProvider()
+        let store = StateStore(url: URL.temporaryDirectory.appending(path: "tokei-test-\(UUID().uuidString).json"))
+        let refresher = Refresher(providers: [provider], store: store)
+        async let first: Void = refresher.refresh(.claude)
+        async let second: Void = refresher.refresh(.claude)
+        _ = await (first, second)
+        #expect(provider.fetches.withLock { $0 } == 1)
+
+        let background = Task { await refresher.refresh(.claude) }
+        await Task.yield()
+        await refresher.refreshAfterCurrent(.claude)
+        await background.value
+        #expect(provider.fetches.withLock { $0 } == 3)
+        #expect(refresher.refreshing.isEmpty)
     }
 
     @Test func `providers that are not installed are left out of the panel`() {
@@ -162,6 +246,20 @@ struct MenuRingsTests {
         #expect(StatusBarController.ringValues(states, enabled: [.claude, .codex]) == .init(session: 0.13, weekly: 0.43))
         #expect(StatusBarController.ringValues(states, enabled: [.codex, .claude]) == .init(session: nil, weekly: 0.7))
         #expect(StatusBarController.ringValues(states, enabled: []) == .init(session: nil, weekly: nil))
+    }
+
+    @Test func `rings drop limits past their reset and dim when the sign-in expired`() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        var claude = state([
+            UsageWindow(id: "session", label: "", kind: .primary, used: 0.8, resetsAt: now.addingTimeInterval(-60)),
+            UsageWindow(id: "weekly", label: "", kind: .primary, used: 0.4, resetsAt: now.addingTimeInterval(3600)),
+        ])
+        #expect(StatusBarController.ringValues([.claude: claude], enabled: [.claude], now: now) == .init(session: nil, weekly: 0.4))
+
+        claude.error = "Sign-in expired"
+        #expect(StatusBarController.ringValues([.claude: claude], enabled: [.claude], now: now).stale)
+        claude.transient = true
+        #expect(!StatusBarController.ringValues([.claude: claude], enabled: [.claude], now: now).stale)
     }
 
     @Test func `codex windows without lengths fall back to slot order`() {
