@@ -7,6 +7,11 @@ on:
     branches: [main]
     paths: ["Sources/**", "project.yml"]
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish (off: build, sign and verify only)"
+        type: boolean
+        default: true
 
 concurrency:
   group: release
@@ -68,11 +73,18 @@ jobs:
         env:
           # Also pushes the cask to wormadev/homebrew-tap, which GITHUB_TOKEN can't reach.
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          PUBLISH: ${{ github.event_name == 'push' || inputs.publish }}
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           gh auth setup-git
-          scripts/release.sh --publish
+          if [[ "$PUBLISH" == true ]]; then
+            scripts/release.sh --publish
+          else
+            # Placeholder notes: a dry run may have no feat/fix commits to generate them from.
+            echo "- Dry run" > "$RUNNER_TEMP/notes.md"
+            scripts/release.sh --notes "$RUNNER_TEMP/notes.md"
+          fi
 
       - name: Clean up
         if: always()
