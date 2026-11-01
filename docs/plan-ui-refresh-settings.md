@@ -6,15 +6,15 @@ Priority across parts: refresh first (it touches trust in the numbers), then UI 
 
 ## 1. Refresh redesign
 
-Today: a refresh button with a rotating icon in the header, a per-provider "now / 2m ago" label, a mini spinner per card, an "Agent aware" background picker (every 5 min while an agent works, 15 min idle), an on/off "Refresh when opening the panel" toggle, exponential backoff to 30 min, 429 waits 5 min.
+Today: a refresh button with a rotating icon in the header, a per-provider "now / 2m ago" label, an "Agent aware" background picker (every 5 min while an agent works, 15 min idle), an on/off "Refresh when opening the panel" toggle, exponential backoff to 30 min, 429 waits 5 min.
 
 Problems found:
 - SPEC says opening the panel refreshes anything older than 60 s; the code calls `refreshStale()` with its 120 s default (StatusBarController.swift:73, Refresher.swift:88). One of them is wrong.
-- Three spinners can show at once (header icon, card spinner, row spinner). The header icon spins while any provider loads, so a slow Codex call makes Claude look stale.
+- The only refresh signal is the header icon (PanelView:52), which spins while any provider refreshes; cards show none. A slow Codex call makes Claude look stale too. (The mini ProgressViews at PanelView:156/240 are for sign-in renew and banked redeem, not refresh.)
 - Failures already show "Couldn't update · retrying in 4m" with the error on hover (PanelView.swift:141). 429 gets the same wording as any other failure.
 - "Refresh when opening the panel" off is a trap: the panel shows old numbers with no hint. In the screenshot it is off.
 
-R1. One loading signal per provider. The header button only spins for a manual refresh and stops when all providers finish. Cards show progress by fading the "ago" label to "Updating..." instead of a spinner. Numbers never blank (stale-while-revalidate stays).
+R1. One loading signal per provider. The header button only spins for a manual refresh and stops when all providers finish. Cards gain a signal of their own: the "ago" label reads "Updating..." while that provider refreshes. Numbers never blank (stale-while-revalidate stays).
 - [ ] Manual refresh: header icon spins, then stops when the last provider answers
 - [ ] Background refresh: no header spin; the card's label reads "Updating..." then "now"
 - [ ] No layout shift during a refresh (row heights equal before and after, screenshot diff)
@@ -23,7 +23,11 @@ R2. Name the rate limit. Keep the existing "Couldn't update · retrying in ..." 
 - [ ] Fixture 429 response: label reads "Rate limited", retry time matches Retry-After (min 5 min)
 - [ ] Offline refresh still reads "Couldn't update" and the numbers stay
 
-R3. Settle the open-panel rule. Open the panel: refresh any provider older than 60 s (SPEC value) and drop the toggle (see S2). A user who wants zero network can pick "Never" in background refresh, which also turns off refresh-on-open.
+R3. Settle the open-panel rule (needs the user's yes, like U1). Open the panel: refresh any provider older than 60 s (SPEC value) and drop the toggle (see S2). A user who wants zero network can pick "Never" in background refresh, which also turns off refresh-on-open. This changes today's behavior: with Never and the toggle on, opening the panel still refreshes (SettingsView:132).
+- [ ] Upgrade from 0.1.3 with refreshOnOpen=false and a timed interval: opening the panel now refreshes anything older than 60 s (they lose the opt-out; Never is the way back to no automatic requests)
+- [ ] Upgrade from 0.1.3 with refreshOnOpen=false and Never: no change, only Refresh (Cmd-R) fetches
+- [ ] Upgrade from 0.1.3 with refreshOnOpen=true and Never: opening the panel no longer refreshes (behavior change; release notes say so)
+- [ ] The refresh footer (SettingsView:132) matches: Never reads "Usage updates only when you press Refresh (⌘R)."; timed intervals read "Opening the panel also refreshes anything older than 1 minute."
 - [ ] Open the panel 30 s after a refresh: no request (check the log)
 - [ ] Open the panel 90 s after: one request per enabled provider
 - [ ] "Never": opening the panel sends nothing; the manual button still works
@@ -63,10 +67,10 @@ Every UI item: light and dark screenshots, no email visible (`-show.account NO`)
 Today: a sidebar with General, Display, then Providers (Claude, Codex). SPEC says "three tabs (General, Providers, Display)"; the build has a sidebar instead. General mixes refresh, notifications, sign-in renewal, menu bar numbers, launch at login and updates.
 
 S1. Group by what the user wants, five sections in a fixed order inside General: Refresh, Notifications, Menu bar, Sign-in, App (launch at login, updates, install count). Each section has a header, not a footer paragraph doing the header's job.
-- [ ] Every existing setting is still reachable, same keys (no migration), same defaults
+- [ ] Every existing setting is still reachable, except those S2 removes, same keys (no migration), same defaults
 - [ ] No section footer longer than one line at the default window width
 
-S2. Fewer controls. Remove "Refresh when opening the panel" (R3). Turn "Menu bar numbers" (two toggles that stack) into one picker: None, Session, Weekly, Both.
+S2. Fewer controls (the toggle removal needs the user's yes, see R3). Remove "Refresh when opening the panel" (R3). Turn "Menu bar numbers" (two toggles that stack) into one picker: None, Session, Weekly, Both.
 - [ ] Upgrade from 0.1.3 with both toggles on: picker shows "Both"; with one on: that one; both off: "None"
 - [ ] Menu bar output identical to 0.1.3 for each of the four cases
 
