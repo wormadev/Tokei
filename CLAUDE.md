@@ -7,7 +7,7 @@ Menu bar AI plan usage (Claude, Codex) for macOS 26+, Liquid Glass UI. See SPEC.
 - `xcodegen generate` after adding/removing files (project.yml is the source of truth; .xcodeproj is generated)
 - `xcodebuild -project Tokei.xcodeproj -scheme Tokei -configuration Debug -derivedDataPath build build`
 - Tests: `xcodebuild -project Tokei.xcodeproj -scheme Tokei -derivedDataPath build test`
-- Release: `scripts/release.sh [--first-release] [--publish]` from a clean main: needs `release-notes/<version>.md` and a bumped `MARKETING_VERSION`; build number is main's commit count. Sparkle EdDSA private key: login Keychain, account `tokei`
+- Release: every merge to main that touches `Sources/**` or `project.yml` ships a patch release through `.github/workflows/release.yml`, which runs `scripts/release.sh --publish`. Version is the latest tag plus one patch, or `MARKETING_VERSION` in project.yml when higher (raise it there for a minor/major). Notes: `release-notes/<version>.md` if present, else the feat/fix commit subjects since the last tag, so PR titles are user-facing. Build number is main's commit count. Repo secrets: `MACOS_CERT_P12`, `MACOS_CERT_PASSWORD`, `SPARKLE_ED_KEY`, `RELEASE_TOKEN`. Local fallback: `scripts/release.sh [--publish]` from a clean main; Sparkle EdDSA private key in the login Keychain, account `tokei`
 - DMG: `scripts/dmg.sh` → `build/dmg/Tokei-<version>.dmg`. Apple Development signed only (no Developer ID on this Mac yet), so it is not notarized: other Macs need Open Anyway in System Settings > Privacy & Security after the first launch (the Homebrew cask strips the quarantine flag instead)
 
 ## Site and video
@@ -28,6 +28,7 @@ Menu bar AI plan usage (Claude, Codex) for macOS 26+, Liquid Glass UI. See SPEC.
 
 ## Constraints
 
+- Every app-changing merge to main gets a release (CI does it): don't hand-bump `MARKETING_VERSION` for a patch, and don't run `release.sh --publish` by hand for a merge CI already released
 - Never refresh Claude or Codex OAuth tokens: the refresh token belongs to the CLI and rotating it logs the CLI out
 - Background refresh never triggers a Keychain prompt. Reading another app's Keychain item happens only after an explicit user action
 - Tests use JSON fixtures, never live endpoints or real credentials

@@ -1,0 +1,81 @@
+name: Release
+
+# Every merge that changes the app ships a patch release: scripts/release.sh picks the version,
+# builds, signs, publishes the GitHub release and appcast, and bumps the Homebrew cask.
+on:
+  push:
+    branches: [main]
+    paths: ["Sources/**", "project.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-26
+    steps:
+      - name: Check secrets
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          SPARKLE_ED_KEY: ${{ secrets.SPARKLE_ED_KEY }}
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          missing=0
+          for name in MACOS_CERT_P12 MACOS_CERT_PASSWORD SPARKLE_ED_KEY RELEASE_TOKEN; do
+            [[ -n "${!name}" ]] || { echo "::error::Repo secret $name is not set"; missing=1; }
+          done
+          exit $missing
+
+      # Build number is main's commit count and the version comes from tags: full history.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v6
+
+      - run: brew install xcodegen
+
+      - name: Signing keychain
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password="$(uuidgen)"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          echo "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+
+      - name: Sparkle key
+        env:
+          SPARKLE_ED_KEY: ${{ secrets.SPARKLE_ED_KEY }}
+        run: |
+          printf '%s' "$SPARKLE_ED_KEY" > "$RUNNER_TEMP/sparkle_ed_key"
+          echo "SPARKLE_KEY_FILE=$RUNNER_TEMP/sparkle_ed_key" >> "$GITHUB_ENV"
+
+      - name: Release
+        env:
+          # Also pushes the cask to wormadev/homebrew-tap, which GITHUB_TOKEN can't reach.
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          gh auth setup-git
+          scripts/release.sh --publish
+
+      - name: Clean up
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/sparkle_ed_key"
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
