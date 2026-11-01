@@ -43,7 +43,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.wormadev.Tokei
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        MARKETING_VERSION: "0.1.1"
+        MARKETING_VERSION: "0.1.2"
         CURRENT_PROJECT_VERSION: "1"
         SPARKLE_FEED_URL: https://tokei.worma.dev/api/appcast.xml
       configs:
