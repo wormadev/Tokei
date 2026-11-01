@@ -54,7 +54,8 @@ final class StatusBarController: NSObject {
             menu.addItem(withTitle: "Refresh", action: #selector(refreshAll), keyEquivalent: "r").target = self
             menu.addItem(withTitle: "Settings…", action: #selector(showSettings), keyEquivalent: ",").target = self
             if Updater.shared.isConfigured {
-                menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "").target = self
+                let title = Updater.shared.availableVersion.map { "Update to \($0)…" } ?? "Check for Updates…"
+                menu.addItem(withTitle: title, action: #selector(checkForUpdates), keyEquivalent: "").target = self
             }
             menu.addItem(.separator())
             menu.addItem(withTitle: "Quit Tokei", action: #selector(NSApplication.terminate), keyEquivalent: "q")

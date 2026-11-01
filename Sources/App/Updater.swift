@@ -13,6 +13,8 @@ final class Updater {
     let isConfigured: Bool
     private(set) var checksAutomatically = false
     private(set) var sharesInstallCount = false
+    /// Set when a scheduled check finds an update that Sparkle would otherwise show behind other windows.
+    fileprivate(set) var availableVersion: String?
 
     @ObservationIgnored private let delegate = UpdaterDelegate()
     @ObservationIgnored private var controller: SPUStandardUpdaterController?
@@ -83,6 +85,21 @@ private final class UpdaterDelegate: NSObject, SPUUpdaterDelegate, @preconcurren
         let id = UserDefaults.standard.string(forKey: key) ?? UUID().uuidString
         UserDefaults.standard.set(id, forKey: key)
         return [["key": "id", "value": id, "displayKey": "Install ID", "displayValue": id]]
+    }
+
+    /// An agent app's scheduled alert after launch opens behind other windows, where it goes unseen.
+    /// Hold it and show "Update to …" in the panel instead; checkForUpdates() then brings it up.
+    func standardUserDriverShouldHandleShowingScheduledUpdate(_ update: SUAppcastItem, andInImmediateFocus immediateFocus: Bool) -> Bool {
+        immediateFocus
+    }
+
+    func standardUserDriverWillHandleShowingUpdate(_ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState) {
+        guard !handleShowingUpdate else { return }
+        Updater.shared.availableVersion = update.displayVersionString
+    }
+
+    func standardUserDriverWillFinishUpdateSession() {
+        Updater.shared.availableVersion = nil
     }
 
     func standardUserDriverWillShowModalAlert() {

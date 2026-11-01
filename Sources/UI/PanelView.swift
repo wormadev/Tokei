@@ -42,6 +42,11 @@ struct PanelView: View {
         HStack(spacing: 4) {
             Text("Tokei").font(.headline)
             Spacer()
+            if let version = Updater.shared.availableVersion {
+                Button("Update to \(version)") { Updater.shared.checkForUpdates() }
+                    .font(.callout)
+                    .help("Tokei \(version) is available")
+            }
             Button(action: refresher.refreshAll) {
                 Image(systemName: "arrow.clockwise")
                     .symbolEffect(.rotate, options: .repeat(.continuous), isActive: !refresher.refreshing.isEmpty)
@@ -51,6 +56,9 @@ struct PanelView: View {
             .help("Refresh now (⌘R)")
             Menu {
                 Button("Settings…", action: openSettings).keyboardShortcut(",")
+                if Updater.shared.isConfigured {
+                    Button("Check for Updates…") { Updater.shared.checkForUpdates() }
+                }
                 Divider()
                 Button("Quit Tokei") { NSApp.terminate(nil) }.keyboardShortcut("q")
             } label: {
