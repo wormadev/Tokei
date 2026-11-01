@@ -30,9 +30,12 @@ jobs:
           MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
           SPARKLE_ED_KEY: ${{ secrets.SPARKLE_ED_KEY }}
           RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          NOTARY_KEY: ${{ secrets.NOTARY_KEY }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER: ${{ secrets.NOTARY_ISSUER }}
         run: |
           missing=0
-          for name in MACOS_CERT_P12 MACOS_CERT_PASSWORD SPARKLE_ED_KEY RELEASE_TOKEN; do
+          for name in MACOS_CERT_P12 MACOS_CERT_PASSWORD SPARKLE_ED_KEY RELEASE_TOKEN NOTARY_KEY NOTARY_KEY_ID NOTARY_ISSUER; do
             [[ -n "${!name}" ]] || { echo "::error::Repo secret $name is not set"; missing=1; }
           done
           exit $missing
@@ -69,10 +72,19 @@ jobs:
           printf '%s' "$SPARKLE_ED_KEY" > "$RUNNER_TEMP/sparkle_ed_key"
           echo "SPARKLE_KEY_FILE=$RUNNER_TEMP/sparkle_ed_key" >> "$GITHUB_ENV"
 
+      - name: Notary key
+        env:
+          NOTARY_KEY: ${{ secrets.NOTARY_KEY }}
+        run: |
+          printf '%s' "$NOTARY_KEY" > "$RUNNER_TEMP/notary_key.p8"
+          echo "NOTARY_KEY_FILE=$RUNNER_TEMP/notary_key.p8" >> "$GITHUB_ENV"
+
       - name: Release
         env:
           # Also pushes the cask to wormadev/homebrew-tap, which GITHUB_TOKEN can't reach.
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER: ${{ secrets.NOTARY_ISSUER }}
           PUBLISH: ${{ github.event_name == 'push' || inputs.publish }}
         run: |
           git config --global user.name "github-actions[bot]"
@@ -89,5 +101,5 @@ jobs:
       - name: Clean up
         if: always()
         run: |
-          rm -f "$RUNNER_TEMP/sparkle_ed_key"
+          rm -f "$RUNNER_TEMP/sparkle_ed_key" "$RUNNER_TEMP/notary_key.p8"
           security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true

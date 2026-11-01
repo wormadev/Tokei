@@ -1,13 +1,14 @@
 #!/bin/bash
 # Release build into build/release/: Tokei.app in a DMG plus a Sparkle appcast signed with the
-# EdDSA key under $SPARKLE_ACCOUNT. Apple Development signed, not notarized (no Developer ID yet):
-# a first install from the DMG needs Privacy & Security > Open Anyway; Sparkle updates after that
-# install without it, and the Homebrew cask strips the quarantine flag.
+# EdDSA key under $SPARKLE_ACCOUNT. Developer ID signed and notarized, so the DMG opens without a
+# Gatekeeper prompt.
 #
 # Version: the latest v* tag plus one patch, or MARKETING_VERSION in project.yml when that is higher
 # (raise it there for a minor or major release). Notes: release-notes/<version>.md if it exists, else
 # the feat/fix commit subjects since the last tag. .github/workflows/release.yml runs this on merges.
 # SPARKLE_KEY_FILE: sign the appcast with this EdDSA key file instead of the login keychain item.
+# NOTARY_KEY_FILE, NOTARY_KEY_ID, NOTARY_ISSUER: App Store Connect API key for notarytool; unset, it
+# uses the "$NOTARY_PROFILE" keychain profile (xcrun notarytool store-credentials).
 #
 #   release.sh [--notes FILE] [--first-release] [--publish]
 #     --notes FILE        release notes, Markdown (default: release-notes/<version>.md, else generated)
@@ -23,6 +24,8 @@ APP_FEED_URL="https://tokei.worma.dev/api/appcast.xml"
 SPARKLE_ACCOUNT="tokei"
 DMGBUILD="dmgbuild==1.6.7"
 APP_NAME="Tokei"
+SIGN_IDENTITY="Developer ID Application"
+NOTARY_PROFILE="tokei-notary"
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$REPO/build/release"
@@ -110,7 +113,14 @@ mkdir -p "$OUT/updates"
 # Manual signing: automatic signing needs an Xcode account, which CI doesn't have.
 xcodebuild -project "$APP_NAME.xcodeproj" -scheme "$APP_NAME" -configuration Release -derivedDataPath "$DERIVED" \
   MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
-  CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="Apple Development" build -quiet
+  CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$SIGN_IDENTITY" OTHER_CODE_SIGN_FLAGS=--timestamp \
+  CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO build -quiet
+# Xcode leaves Sparkle's helpers ad-hoc signed, which notarization rejects: sign inside out, then the app.
+SPARKLE_FW="$APP/Contents/Frameworks/Sparkle.framework"
+for code in "$SPARKLE_FW"/Versions/B/XPCServices/*.xpc "$SPARKLE_FW/Versions/B/Autoupdate" \
+  "$SPARKLE_FW/Versions/B/Updater.app" "$SPARKLE_FW" "$APP"; do
+  codesign --force --sign "$SIGN_IDENTITY" --timestamp --options runtime --preserve-metadata=entitlements "$code"
+done
 codesign --verify --deep --strict "$APP"
 [[ "$(plutil -extract CFBundleVersion raw "$APP/Contents/Info.plist")" == "$BUILD" ]] || fail "Built CFBundleVersion is not $BUILD."
 [[ "$(plutil -extract CFBundleShortVersionString raw "$APP/Contents/Info.plist")" == "$VERSION" ]] || fail "Built version is not $VERSION."
@@ -119,6 +129,18 @@ codesign --verify --deep --strict "$APP"
 step "DMG"
 uvx --from "$DMGBUILD" dmgbuild -s "$REPO/scripts/dmg-settings.py" -D app="$APP" "$APP_NAME" "$DMG"
 hdiutil verify "$DMG" >/dev/null
+codesign --sign "$SIGN_IDENTITY" --timestamp "$DMG"
+
+step "Notarize"
+if [[ -n "${NOTARY_KEY_FILE:-}" ]]; then
+  NOTARY_ARGS=(--key "$NOTARY_KEY_FILE" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER")
+else
+  NOTARY_ARGS=(--keychain-profile "$NOTARY_PROFILE")
+fi
+xcrun notarytool submit "$DMG" "${NOTARY_ARGS[@]}" --wait | tee "$OUT/notary.log"
+grep -q "status: Accepted" "$OUT/notary.log" || fail "Notarization was not accepted (xcrun notarytool log <id> ${NOTARY_ARGS[*]})."
+xcrun stapler staple "$DMG"
+spctl --assess --type open --context context:primary-signature "$DMG" || fail "Gatekeeper rejects $DMG."
 # Unversioned copy for releases/latest/download/Tokei.dmg; kept out of updates/ so generate_appcast
 # sees one archive.
 cp "$DMG" "$OUT/$APP_NAME.dmg"
