@@ -63,7 +63,8 @@ next_version() {
 generated_notes() {
   local range
   range="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null)" && range="$range..HEAD" || range=HEAD
-  git log --first-parent --format=%s "$range" |
+  # Squash merges carry the PR title in the subject, merge commits in the body.
+  git log --first-parent --format='%s%n%b' "$range" |
     sed -nE -e 's/ \(#[0-9]+\)$//' -e 's/^feat(\([^)]*\))?!?: (.*)/- New: \2/p' -e 's/^fix(\([^)]*\))?!?: (.*)/- Fixed: \2/p'
 }
 
