@@ -6,6 +6,7 @@ enum Prefs {
     static let usageDisplayKey = "usageDisplay"
     static let menuBarWeeklyKey = "menuBar.weekly"
     static let menuBarSessionKey = "menuBar.session"
+    static let menuBarIconKey = "menuBar.icon"
     static let showAccountKey = "show.account"
     static let showDetailsKey = "show.details"
     static let showModelLimitsKey = "show.modelLimits"
@@ -28,6 +29,7 @@ enum Prefs {
             usageDisplayKey: UsageDisplay.used.rawValue,
             menuBarWeeklyKey: false,
             menuBarSessionKey: true,
+            menuBarIconKey: MenuBarIcon.tokei.rawValue,
             showAccountKey: true,
             showDetailsKey: false,
             showModelLimitsKey: false,
@@ -102,5 +104,33 @@ enum UsageDisplay: String, CaseIterable, Identifiable {
 
     func text(_ used: Double) -> String {
         "\(Int((value(used) * 100).rounded()))%"
+    }
+}
+
+/// What sits left of the menu bar numbers. Tokei is the live usage rings; the logos are static marks.
+enum MenuBarIcon: String, CaseIterable, Identifiable {
+    case tokei, claude, codex, none
+    var id: String { rawValue }
+
+    static var current: MenuBarIcon {
+        MenuBarIcon(rawValue: UserDefaults.standard.string(forKey: Prefs.menuBarIconKey) ?? "") ?? .tokei
+    }
+
+    var label: String {
+        switch self {
+        case .tokei: "Tokei rings"
+        case .claude: "Claude"
+        case .codex: "Codex"
+        case .none: "None"
+        }
+    }
+
+    /// Image set in Assets.xcassets; nil for the drawn rings and for no icon.
+    var markName: String? {
+        switch self {
+        case .claude: "ClaudeMark"
+        case .codex: "CodexMark"
+        case .tokei, .none: nil
+        }
     }
 }
