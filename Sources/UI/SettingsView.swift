@@ -121,6 +121,7 @@ private struct GeneralSettings: View {
     @AppStorage(Prefs.renewSignInKey) private var renewSignIn = false
     @AppStorage(Prefs.menuBarWeeklyKey) private var menuBarWeekly = false
     @AppStorage(Prefs.menuBarSessionKey) private var menuBarSession = true
+    @AppStorage(Prefs.menuBarIconKey) private var menuBarIcon = MenuBarIcon.tokei
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
 
@@ -170,12 +171,15 @@ private struct GeneralSettings: View {
                 Text("Runs `claude auth status` or `codex login status` when a sign-in expires. That often lets the CLI renew its own token. You're notified only if it doesn't.")
             }
             Section {
-                Toggle("Weekly", isOn: $menuBarWeekly)
-                Toggle("5-hour session", isOn: $menuBarSession)
+                Picker("Icon", selection: $menuBarIcon) {
+                    ForEach(MenuBarIcon.allCases) { Text($0.label).tag($0) }
+                }
+                Toggle("Weekly number", isOn: $menuBarWeekly)
+                Toggle("5-hour session number", isOn: $menuBarSession)
             } header: {
-                Text("Menu bar numbers")
+                Text("Menu bar")
             } footer: {
-                Text("From the first provider in your list, next to its rings. With both on they stack: session on top, weekly below.")
+                Text("Rings and numbers come from the first provider in your list. With both numbers on they stack: session on top, weekly below. With no icon and no numbers, the rings show.")
             }
             Section {
                 Toggle("Launch at login", isOn: $launchAtLogin)

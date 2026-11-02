@@ -99,10 +99,12 @@ final class StatusBarController: NSObject {
             display: display
         )
         let badge = refresher.enabled.contains { refresher.states[$0]?.needsSignIn == true }
-        let shown = Shown(rings: rings, lines: lines, display: display, badge: badge)
+        // No icon and no numbers would leave nothing to click.
+        let icon = MenuBarIcon.current == .none && lines.isEmpty ? .tokei : MenuBarIcon.current
+        let shown = Shown(rings: rings, lines: lines, display: display, badge: badge, icon: icon)
         guard shown != self.shown || item.button?.image == nil else { return }
         self.shown = shown
-        item.button?.image = Self.statusImage(rings, lines: lines, display: display, badge: badge)
+        item.button?.image = Self.statusImage(rings, lines: lines, display: display, badge: badge, icon: icon)
     }
 
     private struct Shown: Equatable {
@@ -110,6 +112,7 @@ final class StatusBarController: NSObject {
         var lines: [String]
         var display: UsageDisplay
         var badge: Bool
+        var icon: MenuBarIcon
     }
 
     /// Session above weekly, like the inner ring sits inside the outer one. Unknown values
@@ -146,22 +149,28 @@ final class StatusBarController: NSObject {
     /// menu bar's appearance. Outer ring = weekly, inner = 5h session; faint tracks keep the
     /// mark recognizable at 0%. Stale numbers are dimmed; the badge dot means a sign-in needs the user.
     /// No session limit: the app icon's spark sits inside the weekly ring.
-    static func statusImage(_ rings: Rings, lines: [String], display: UsageDisplay, badge: Bool = false) -> NSImage {
+    /// A logo icon replaces the rings; no icon leaves the numbers, with the badge dot ahead of them.
+    static func statusImage(_ rings: Rings, lines: [String], display: UsageDisplay, badge: Bool = false, icon: MenuBarIcon = .tokei) -> NSImage {
         let ink = NSColor.black.withAlphaComponent(rings.stale ? 0.4 : 1)
         // Full menu bar height so stacked numbers aren't squeezed into the rings' 18 pt.
         let height: CGFloat = 22
         let font = NSFont.monospacedDigitSystemFont(ofSize: lines.count > 1 ? 11 : 13, weight: .semibold)
         let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: ink]
         let textWidth = lines.map { ($0 as NSString).size(withAttributes: attributes).width }.max() ?? 0
-        let width = 18 + (lines.isEmpty ? 0 : 4 + ceil(textWidth))
+        let iconWidth: CGFloat = icon != .none ? 18 : badge ? 6 : 0
+        let textX = iconWidth + (iconWidth > 0 ? 4 : 0)
+        let width = lines.isEmpty ? iconWidth : textX + ceil(textWidth)
         let image = NSImage(size: NSSize(width: width, height: height), flipped: false) { _ in
             let center = NSPoint(x: 9, y: height / 2)
+            if let mark = icon.markName.flatMap(NSImage.init(named:)) {
+                mark.draw(in: NSRect(x: 1, y: center.y - 8, width: 16, height: 16), from: .zero, operation: .sourceOver, fraction: ink.alphaComponent)
+            }
             let sparkOnly = rings.noSession
-            if sparkOnly {
+            if icon == .tokei && sparkOnly {
                 ink.setFill()
                 spark(at: center, radius: 4.4).fill()
             }
-            for (radius, used) in [(7.0, rings.weekly), (3.6, rings.session)] where !(sparkOnly && radius < 7) {
+            for (radius, used) in [(7.0, rings.weekly), (3.6, rings.session)] where icon == .tokei && !(sparkOnly && radius < 7) {
                 let track = NSBezierPath()
                 track.appendArc(withCenter: center, radius: radius, startAngle: 0, endAngle: 360)
                 track.lineWidth = 2.2
@@ -183,9 +192,12 @@ final class StatusBarController: NSObject {
             let block = font.capHeight * CGFloat(lines.count) + gap * CGFloat(max(lines.count - 1, 0))
             for (index, line) in lines.enumerated() {
                 let baseline = (height + block) / 2 - font.capHeight - CGFloat(index) * (font.capHeight + gap)
-                (line as NSString).draw(at: NSPoint(x: 22, y: baseline + font.descender), withAttributes: attributes)
+                (line as NSString).draw(at: NSPoint(x: textX, y: baseline + font.descender), withAttributes: attributes)
             }
-            if badge {
+            if badge && icon == .none {
+                NSColor.black.setFill()
+                NSBezierPath(ovalIn: NSRect(x: 0, y: height / 2 - 2.7, width: 5.4, height: 5.4)).fill()
+            } else if badge {
                 // Cut a gap into the rings so the dot reads as a separate mark.
                 let dot = NSPoint(x: 14.5, y: 16.5)
                 let circle = { (radius: CGFloat) in NSBezierPath(ovalIn: NSRect(x: dot.x - radius, y: dot.y - radius, width: radius * 2, height: radius * 2)) }

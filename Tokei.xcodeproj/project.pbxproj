@@ -26,6 +26,7 @@
 		A731346DE4A709DC83C246F7 /* ClaudeProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AB0FD45491FA3C485858165 /* ClaudeProvider.swift */; };
 		AB93EDFEBAB707819E310C59 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = E82CB690456EFC3AA5DC6636 /* Models.swift */; };
 		B02139C7980CE99615A559CE /* ProviderParsingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C188A44B996D92F148A576A /* ProviderParsingTests.swift */; };
+		B61341D094FD7FB9A866C047 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 178FD09AC817647EE0272F55 /* Assets.xcassets */; };
 		C41947D5A96581F0B62F2933 /* AgentActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6216EEFA0838076E7929A1AC /* AgentActivity.swift */; };
 		DB0CFA4843491893B76EA5B9 /* Updater.swift in Sources */ = {isa = PBXBuildFile; fileRef = F653EADBA3830746EA9958C1 /* Updater.swift */; };
 		DF41AFA7B1984D8A3EC282FC /* PanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E349BBE3B651F19D8AC07BD8 /* PanelView.swift */; };
@@ -47,6 +48,7 @@
 /* Begin PBXFileReference section */
 		00E03FF902691C591C0EB605 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		0C61C853F2F27EC5ECCE0595 /* Refresher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Refresher.swift; sourceTree = "<group>"; };
+		178FD09AC817647EE0272F55 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1C188A44B996D92F148A576A /* ProviderParsingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderParsingTests.swift; sourceTree = "<group>"; };
 		42222E421C5185122D65605C /* Connector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Connector.swift; sourceTree = "<group>"; };
 		6216EEFA0838076E7929A1AC /* AgentActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActivity.swift; sourceTree = "<group>"; };
@@ -148,6 +150,7 @@
 			isa = PBXGroup;
 			children = (
 				00E03FF902691C591C0EB605 /* AppIcon.icon */,
+				178FD09AC817647EE0272F55 /* Assets.xcassets */,
 				AFECC1E5F96727B7B7269205 /* Info.plist */,
 				89DC53732392CF05D38BC861 /* App */,
 				28B04BC73476009B9DF9A197 /* Core */,
@@ -264,6 +267,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F69041983B3CE9E8B6993CCB /* AppIcon.icon in Resources */,
+				B61341D094FD7FB9A866C047 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
