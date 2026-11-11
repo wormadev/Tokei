@@ -45,14 +45,14 @@ Sign in to [Claude Code](https://docs.anthropic.com/en/docs/claude-code) or [Cod
 |---|---|
 | <img src="docs/images/tokei-menubar.png" width="130" alt="Menu bar rings with 3% and 60%"> | **Always in view.** Two rings and two numbers: the 5-hour session on top, the week below. |
 | <img src="docs/images/panel.png" width="320" alt="Usage panel"> | **Pace, not just percent.** Usage compared to an even spread over the window: "10% in reserve · Lasts until reset", or when it runs out. |
-| <img src="docs/images/panel-full.png" width="320" alt="Panel with history and per-model limits"> | **Details on demand.** 7-day history, per-model limits, spend and service outages. All opt-in under Settings > Display. |
+| <img src="docs/images/panel-full.png" width="320" alt="Panel with history and per-model limits"> | **Details on demand.** 7-day history, per-model limits, spend and service outages. All opt-in under Settings > Panel. |
 | <img src="docs/images/settings-general.png" width="320" alt="General settings"> | **Quiet by design.** Every 5 minutes while Claude Code or Codex is working, every 15 when idle, paused while the Mac sleeps or is locked. No Keychain prompts in the background. |
 
 Also: reset notifications, used or remaining counting, provider order, launch at login, and numbers that show instantly at launch and never blank out while refreshing.
 
 ## Privacy
 
-No account, no tracking. Your Claude token goes only to `api.anthropic.com`, your Codex token only to `chatgpt.com`. It also reads public status pages (`status.claude.com`, `status.openai.com`) and checks for updates through `tokei.worma.dev`, which forwards to GitHub. If you opt in (Settings > General > Share anonymous install count), update checks carry a random ID and Sparkle's system profile so installs can be counted; only the ID, app build, macOS version and CPU type are kept, and totals are public at [tokei.worma.dev/api/stats](https://tokei.worma.dev/api/stats). Details: [privacy policy](https://tokei.worma.dev/privacy.html). Tokei never refreshes your tokens, so it can't log the CLIs out. Usage and settings stay on your Mac.
+No account, no tracking. Your Claude token goes only to `api.anthropic.com`, your Codex token only to `chatgpt.com`. It also reads public status pages (`status.claude.com`, `status.openai.com`) and checks for updates through `tokei.worma.dev`, which forwards to GitHub. If you opt in (Settings > Login and updates > Share anonymous install count), update checks carry a random ID and Sparkle's system profile so installs can be counted; only the ID, app build, macOS version and CPU type are kept, and totals are public at [tokei.worma.dev/api/stats](https://tokei.worma.dev/api/stats). Details: [privacy policy](https://tokei.worma.dev/privacy.html). Tokei never refreshes your tokens, so it can't log the CLIs out. Usage and settings stay on your Mac.
 
 ## Build from source
 

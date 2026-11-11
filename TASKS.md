@@ -66,8 +66,9 @@ Server and site
 - [x] Privacy page names Cloudflare as proxy; SPEC.md matches the app
 
 Needs a decision
-- [ ] Settings redesign: pick a variant
-- [ ] Background Keychain read vs the "only after explicit user action" rule (Connect gate was removed in a7ea2fb; SPEC and CLAUDE.md still describe it)
-- [ ] Sign-in expiry notification on local token expiry can alert daily
-- [ ] Homebrew cask still strips quarantine (other repo)
+- [x] Settings redesign: pick a variant
+- [x] Background Keychain read vs the "only after explicit user action" rule (Connect gate was removed in a7ea2fb; SPEC and CLAUDE.md still describe it)
+- [x] Sign-in expiry notification on local token expiry can alert daily
+- [x] Homebrew cask still strips quarantine (other repo)
+- [x] main protected, CI checks `app` and `server` required (they first run on the PR that adds ci.yml)
 - [ ] Dokploy: Requests logging off for tokei-server; origin reachable only via Cloudflare; uptime monitor on /api/appcast.xml
