@@ -149,7 +149,7 @@ struct ProviderCard: View {
             }
             if state.transient == true, state.snapshot != nil, let error = state.error {
                 // Nothing to fix: say it calmly and keep the last numbers.
-                Text("Couldn't update\(state.retryAt.map { " · retrying \(TimeText.reset($0, now: now, absolute: false))" } ?? "")")
+                Text(state.keychainUnavailable ? error : "Couldn't update\(state.retryAt.map { " · retrying \(TimeText.reset($0, now: now, absolute: false))" } ?? "")")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .help(error)
@@ -171,7 +171,7 @@ struct ProviderCard: View {
                                 .foregroundStyle(.tint)
                                 .help("Runs `\(command.cli)` in Terminal, which renews the sign-in")
                         } else {
-                            Button("Fix") { Task { await connector.renewSignIn(id) } }
+                            Button("Fix") { Task { await connector.renewSignIn(id, userInitiated: true) } }
                                 .buttonStyle(.borderless)
                                 .foregroundStyle(.tint)
                                 .help("Runs `\(command.cli) \(command.arguments.joined(separator: " "))`, which can renew the sign-in")

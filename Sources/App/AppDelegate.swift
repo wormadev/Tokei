@@ -28,12 +28,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         refresher.onReset = { Notifier.postReset($0, $1) }
         Notifier.requestPermissionIfEnabled()
         connector = Connector(refresher: refresher)
-        refresher.onSignInExpired = { [connector] id, hint in
+        // Only a server rejection notifies; a token that merely passed its expiry renews silently.
+        refresher.onSignInExpired = { [connector] id, hint, rejected in
             guard UserDefaults.standard.bool(forKey: Prefs.renewSignInKey), let connector else {
-                return Notifier.postSignInExpired(id, hint: hint)
+                if rejected { Notifier.postSignInExpired(id, hint: hint) }
+                return
             }
             Task {
-                if await !connector.renewSignIn(id) { Notifier.postSignInExpired(id, hint: hint) }
+                if await !connector.renewSignIn(id, userInitiated: false), rejected { Notifier.postSignInExpired(id, hint: hint) }
             }
         }
         statusBar = StatusBarController(refresher: refresher, connector: connector, openSettings: { [weak self] in self?.settings.show() })

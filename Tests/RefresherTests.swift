@@ -8,7 +8,7 @@ private struct StubProvider: UsageProvider {
     var installed = true
     var activityFolder: URL { URL.temporaryDirectory }
     func isInstalled() -> Bool { installed }
-    func fetch() async throws -> Snapshot { throw ProviderError.http(500) }
+    func fetch(userInitiated: Bool) async throws -> Snapshot { throw ProviderError.http(500) }
 }
 
 private final class CountingProvider: UsageProvider, Sendable {
@@ -16,7 +16,7 @@ private final class CountingProvider: UsageProvider, Sendable {
     let fetches = Mutex(0)
     var activityFolder: URL { URL.temporaryDirectory }
     func isInstalled() -> Bool { true }
-    func fetch() async throws -> Snapshot {
+    func fetch(userInitiated: Bool) async throws -> Snapshot {
         fetches.withLock { $0 += 1 }
         try await Task.sleep(for: .milliseconds(100))
         throw ProviderError.http(500)
@@ -80,7 +80,7 @@ struct RefresherTests {
     @Test func `an expired sign-in notifies once and needs the user, a server error does neither`() {
         let refresher = makeRefresher()
         var notified: [String] = []
-        refresher.onSignInExpired = { notified.append($1) }
+        refresher.onSignInExpired = { _, hint, _ in notified.append(hint) }
         let now = Date(timeIntervalSince1970: 1_000_000)
         refresher.apply(.success(snapshot(used: 0.3, at: now)), to: .claude, now: now)
         refresher.apply(.failure(ProviderError.http(502)), to: .claude, now: now)
@@ -95,6 +95,39 @@ struct RefresherTests {
         #expect(refresher.states[.claude]?.needsSignIn == false)
         refresher.apply(.failure(ProviderError.unauthorized("Run `claude`")), to: .claude, now: now)
         #expect(notified.count == 2)
+    }
+
+    @Test func `a token past its saved expiry needs the user but does not notify, a server 401 notifies once`() {
+        let refresher = makeRefresher()
+        var calls: [(hint: String, rejected: Bool)] = []
+        refresher.onSignInExpired = { calls.append(($1, $2)) }
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        refresher.apply(.success(snapshot(used: 0.3, at: now)), to: .claude, now: now)
+        refresher.apply(.failure(ProviderError.signInExpired("Run `claude` once")), to: .claude, now: now)
+        refresher.apply(.failure(ProviderError.signInExpired("Run `claude` once")), to: .claude, now: now)
+        #expect(refresher.states[.claude]?.needsSignIn == true)
+        #expect(refresher.states[.claude]?.snapshot != nil)
+        #expect(calls.map(\.rejected) == [false])
+
+        refresher.apply(.success(snapshot(used: 0.3, at: now)), to: .claude, now: now)
+        refresher.apply(.failure(ProviderError.unauthorized("Run `claude`")), to: .claude, now: now)
+        refresher.apply(.failure(ProviderError.unauthorized("Run `claude`")), to: .claude, now: now)
+        #expect(calls.filter(\.rejected).map(\.hint) == ["Run `claude`"])
+    }
+
+    @Test func `an unreadable keychain keeps the numbers without a badge or notification`() {
+        let refresher = makeRefresher()
+        var notified = 0
+        refresher.onSignInExpired = { _, _, _ in notified += 1 }
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        refresher.apply(.success(snapshot(used: 0.3, at: now)), to: .claude, now: now)
+        refresher.apply(.failure(ProviderError.keychainLocked), to: .claude, now: now)
+        let state = refresher.states[.claude]
+        #expect(state?.snapshot?.windows.first?.used == 0.3)
+        #expect(state?.needsSignIn == false)
+        #expect(state?.keychainUnavailable == true)
+        #expect(state?.error == "Keychain is locked. Refresh to try again.")
+        #expect(notified == 0)
     }
 
     @Test func `a rate limit after a rejected sign-in keeps the sign-in alert`() {
@@ -125,7 +158,7 @@ struct RefresherTests {
     @Test func `a missing sign-in needs the user without an expiry notification`() {
         let refresher = makeRefresher()
         var notified = 0
-        refresher.onSignInExpired = { _, _ in notified += 1 }
+        refresher.onSignInExpired = { _, _, _ in notified += 1 }
         refresher.apply(.failure(ProviderError.notConfigured("Sign in")), to: .claude, now: .now)
         #expect(refresher.states[.claude]?.needsSignIn == true)
         #expect(notified == 0)

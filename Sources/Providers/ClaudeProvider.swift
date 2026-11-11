@@ -35,24 +35,29 @@ struct ClaudeProvider: UsageProvider {
             .flatMap { $0.claudeAiOauth == nil ? nil : $0 }
     }
 
-    static func readKeychain() -> Credentials? {
-        Keychain.readViaSecurityTool(service: keychainService)
-            .flatMap { try? JSONDecoder().decode(Credentials.self, from: $0) }
-            .flatMap { $0.claudeAiOauth == nil ? nil : $0 }
+    static let keychainGate = KeychainGate()
+
+    static func readKeychain(userInitiated: Bool) throws -> Credentials? {
+        try keychainGate.read(userInitiated: userInitiated, isUnlocked: Keychain.isDefaultUnlocked) {
+            Keychain.readViaSecurityTool(service: keychainService)
+        }
+        .flatMap { try? JSONDecoder().decode(Credentials.self, from: $0) }
+        .flatMap { $0.claudeAiOauth == nil ? nil : $0 }
     }
 
     /// Claude Code keeps the live token in the Keychain on macOS; the file is often stale.
-    /// An unexpired file wins, so no Keychain read is needed at all then.
-    static func resolveCredentials() throws -> Credentials {
+    /// An unexpired file wins, so no Keychain read is needed at all then. A Keychain that
+    /// can't be read throws rather than falling back to the stale file.
+    static func resolveCredentials(userInitiated: Bool) throws -> Credentials {
         let file = readFile()
         if let file, !file.isExpired { return file }
-        if let keychain = readKeychain() { return keychain }
+        if let keychain = try readKeychain(userInitiated: userInitiated) { return keychain }
         if let file { return file }
         throw ProviderError.notConfigured("Run `claude` and sign in.")
     }
 
     #if DEBUG
-    /// `-debugExpiredSignIn YES`: acts as if the token expired, to test the sign-in alert.
+    /// `-debugExpiredSignIn YES`: acts as if Claude rejected the token, to test the sign-in alert.
     private static var debugExpired: Bool { UserDefaults.standard.bool(forKey: "debugExpiredSignIn") }
     #else
     private static let debugExpired = false
@@ -67,14 +72,15 @@ struct ClaudeProvider: UsageProvider {
             || Keychain.exists(service: Self.keychainService)
     }
 
-    func fetch() async throws -> Snapshot {
-        let credentials = try Self.resolveCredentials()
+    func fetch(userInitiated: Bool) async throws -> Snapshot {
+        let credentials = try Self.resolveCredentials(userInitiated: userInitiated)
         guard let oauth = credentials.claudeAiOauth else { throw ProviderError.notConfigured("Run `claude` and sign in.") }
-        if credentials.isExpired || Self.debugExpired {
-            throw ProviderError.unauthorized("Sign-in expired. Run `claude` once to refresh it.")
+        let hint = "Claude rejected the sign-in. Run `claude` and sign in again."
+        if Self.debugExpired { throw ProviderError.unauthorized(hint) }
+        if credentials.isExpired {
+            throw ProviderError.signInExpired("Sign-in expired. Run `claude` once to refresh it.")
         }
         let headers = Self.requestHeaders(token: oauth.accessToken)
-        let hint = "Claude rejected the sign-in. Run `claude` and sign in again."
         let usage: Usage
         do {
             // cedar_ember=1 adds banked reset grants. Fall back to plain usage if it's refused.
@@ -216,7 +222,7 @@ struct ClaudeProvider: UsageProvider {
 
     /// Spends one banked reset. Each call gets a fresh request id, so it's one claim per click.
     static func redeem(grantID: String) async throws -> String {
-        let credentials = try resolveCredentials()
+        let credentials = try resolveCredentials(userInitiated: true)
         guard let oauth = credentials.claudeAiOauth, !credentials.isExpired else {
             throw ProviderError.unauthorized("Sign-in expired. Run `claude` once to refresh it.")
         }

@@ -30,7 +30,7 @@ final class Connector {
                 notice = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }
             notices[id] = notice
-            await refresher.refreshAfterCurrent(id)
+            await refresher.refreshAfterCurrent(id, userInitiated: true)
             redeeming.remove(id)
             // By now the card shows the new numbers; the notice has done its job.
             try? await Task.sleep(for: .seconds(60))
@@ -47,7 +47,7 @@ final class Connector {
 
     /// False when the sign-in is known to still be broken afterwards.
     @discardableResult
-    func renewSignIn(_ id: ProviderID) async -> Bool {
+    func renewSignIn(_ id: ProviderID, userInitiated: Bool) async -> Bool {
         guard let command = Self.statusCommands[id], !renewing.contains(id) else { return false }
         guard let cli = Executable.path(command.cli) else {
             renewFailures[id] = ("Couldn't find \(command.cli). Run it in Terminal.", .now)
@@ -62,7 +62,7 @@ final class Connector {
             renewFailures[id] = ("Couldn't run \(command.cli): \(error.localizedDescription)", .now)
             return false
         }
-        await refresher.refreshAfterCurrent(id)
+        await refresher.refreshAfterCurrent(id, userInitiated: userInitiated)
         // A 429 says nothing about the sign-in either way: no failure, no notification.
         if refresher.states[id]?.rateLimited == true { return true }
         guard refresher.states[id]?.needsSignIn != true else {

@@ -30,5 +30,5 @@ Menu bar AI plan usage (Claude, Codex) for macOS 26+, Liquid Glass UI. See SPEC.
 
 - Every app-changing merge to main gets a release (CI does it): don't hand-bump `MARKETING_VERSION` for a patch, and don't run `release.sh --publish` by hand for a merge CI already released
 - Never refresh Claude or Codex OAuth tokens: the refresh token belongs to the CLI and rotating it logs the CLI out
-- Background refresh never triggers a Keychain prompt. Reading another app's Keychain item happens only after an explicit user action
+- Never spam Keychain prompts: background refresh skips the Keychain while the login keychain is locked, and after one failed read (denied or timed out) stops background Keychain reads for the rest of the run. Only an explicit user action (Refresh / Cmd-R, Fix, redeeming a reset, turning the provider on; not opening the panel) reads again, and its success clears the stop
 - Tests use JSON fixtures, never live endpoints or real credentials

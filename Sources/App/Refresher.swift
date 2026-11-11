@@ -17,6 +17,10 @@ struct ProviderState: Codable, Equatable {
 
     /// Only the user can fix this one, so the menu bar flags it.
     var needsSignIn: Bool { error != nil && transient != true }
+
+    var keychainUnavailable: Bool {
+        [ProviderError.keychainLocked, .keychainBlocked].contains { $0.errorDescription == error }
+    }
 }
 
 /// Owns all fetching. One 30 s tick decides who is due, so there is a single timer, it can
@@ -33,7 +37,8 @@ final class Refresher {
     private(set) var statuses: [ProviderID: ServiceStatus] = [:]
 
     @ObservationIgnored var onReset: ((ProviderID, UsageWindow) -> Void)?
-    @ObservationIgnored var onSignInExpired: ((ProviderID, String) -> Void)?
+    /// rejected: the server refused the sign-in. False when only the saved expiry passed.
+    @ObservationIgnored var onSignInExpired: ((ProviderID, String, Bool) -> Void)?
     @ObservationIgnored private let providers: [ProviderID: any UsageProvider]
     @ObservationIgnored private let store: StateStore
     @ObservationIgnored private var loop: Task<Void, Never>?
@@ -86,7 +91,7 @@ final class Refresher {
 
     /// Manual refresh ignores backoff: the user asked, and errors show immediately.
     func refreshAll() {
-        for id in enabled { Task { await refresh(id) } }
+        for id in enabled { Task { await refresh(id, userInitiated: true) } }
     }
 
     /// Panel opened: anything older than a minute is worth a quiet refresh.
@@ -128,7 +133,7 @@ final class Refresher {
     }
 
     /// Joins a refresh already under way instead of starting a second one.
-    func refresh(_ id: ProviderID) async {
+    func refresh(_ id: ProviderID, userInitiated: Bool = false) async {
         if let running = running[id] { return await running.value }
         guard let provider = providers[id] else { return }
         refreshing.insert(id)
@@ -143,7 +148,7 @@ final class Refresher {
         let task = Task {
             let result: Result<Snapshot, Error>
             do {
-                result = try .success(await provider.fetch())
+                result = try .success(await provider.fetch(userInitiated: userInitiated))
             } catch {
                 result = .failure(error)
             }
@@ -157,9 +162,9 @@ final class Refresher {
     }
 
     /// For when the credentials just changed: a refresh already under way read the old ones.
-    func refreshAfterCurrent(_ id: ProviderID) async {
+    func refreshAfterCurrent(_ id: ProviderID, userInitiated: Bool = false) async {
         await running[id]?.value
-        await refresh(id)
+        await refresh(id, userInitiated: userInitiated)
     }
 
     /// An unreachable status page clears the badge rather than leaving an old incident up.
@@ -210,7 +215,13 @@ final class Refresher {
             }
             state.retryAt = now.addingTimeInterval(Self.backoff(error: error, failures: state.failures))
             if case .rateLimited? = error as? ProviderError { state.rateLimited = true } else { state.rateLimited = nil }
-            if case .unauthorized(let hint)? = error as? ProviderError, !neededSignIn { onSignInExpired?(id, hint) }
+            if !neededSignIn {
+                switch error as? ProviderError {
+                case let .unauthorized(hint)?: onSignInExpired?(id, hint, true)
+                case let .signInExpired(hint)?: onSignInExpired?(id, hint, false)
+                default: break
+                }
+            }
         }
         states[id] = state
         store.save(.init(states: states, history: history))
@@ -244,8 +255,8 @@ final class Refresher {
 
     nonisolated static func isTransient(_ error: Error) -> Bool {
         switch error as? ProviderError {
-        case .rateLimited?, .http?, .badResponse?: true
-        case .notConfigured?, .unauthorized?: false
+        case .rateLimited?, .http?, .badResponse?, .keychainLocked?, .keychainBlocked?: true
+        case .notConfigured?, .unauthorized?, .signInExpired?: false
         case nil: error is URLError
         }
     }

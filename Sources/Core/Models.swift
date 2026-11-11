@@ -125,14 +125,21 @@ extension [UsageWindow] {
 
 enum ProviderError: Error, Equatable, LocalizedError {
     case notConfigured(String)
+    /// The server rejected the sign-in.
     case unauthorized(String)
+    /// The saved token's expiry passed. The CLI renews it next time it runs, so no alert.
+    case signInExpired(String)
+    case keychainLocked
+    case keychainBlocked
     case rateLimited(retryAfter: TimeInterval?)
     case http(Int)
     case badResponse(String)
 
     var errorDescription: String? {
         switch self {
-        case let .notConfigured(hint), let .unauthorized(hint): hint
+        case let .notConfigured(hint), let .unauthorized(hint), let .signInExpired(hint): hint
+        case .keychainLocked: "Keychain is locked. Refresh to try again."
+        case .keychainBlocked: "Couldn't read the Keychain. Refresh to try again."
         case .rateLimited: "Rate limited, retrying later"
         case let .http(code): "Server returned HTTP \(code)"
         case let .badResponse(detail): "Unexpected response: \(detail)"
@@ -146,7 +153,8 @@ protocol UsageProvider: Sendable {
     func isInstalled() -> Bool
     /// Where the CLI writes session logs; writes there mean an agent is working.
     var activityFolder: URL { get }
-    func fetch() async throws -> Snapshot
+    /// userInitiated: the user asked (Refresh, Fix, a reset), so a Keychain read may prompt.
+    func fetch(userInitiated: Bool) async throws -> Snapshot
 }
 
 enum Money {

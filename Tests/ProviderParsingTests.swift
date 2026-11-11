@@ -328,3 +328,41 @@ struct ServiceStatusTests {
         #expect(status == ServiceStatus(title: "Major System Outage", severity: .major, link: page))
     }
 }
+
+struct KeychainGateTests {
+    @Test func `a locked keychain is never read in the background, and does not latch`() throws {
+        let gate = KeychainGate()
+        var reads = 0
+        #expect(throws: ProviderError.keychainLocked) {
+            try gate.read(userInitiated: false, isUnlocked: { false }) { reads += 1; return .found(Data("x".utf8)) }
+        }
+        #expect(reads == 0)
+        #expect(!gate.isLatched)
+        #expect(try gate.read(userInitiated: false, isUnlocked: { true }) { reads += 1; return .notFound } == nil)
+        #expect(reads == 1)
+    }
+
+    @Test func `a failed background read stops background reads until an explicit read succeeds`() throws {
+        let gate = KeychainGate()
+        var reads = 0
+        #expect(throws: ProviderError.keychainBlocked) {
+            try gate.read(userInitiated: false, isUnlocked: { true }) { reads += 1; return .failed }
+        }
+        #expect(gate.isLatched)
+        #expect(throws: ProviderError.keychainBlocked) {
+            try gate.read(userInitiated: false, isUnlocked: { true }) { reads += 1; return .found(Data("x".utf8)) }
+        }
+        #expect(reads == 1)
+
+        #expect(throws: ProviderError.keychainBlocked) {
+            try gate.read(userInitiated: true, isUnlocked: { false }) { reads += 1; return .failed }
+        }
+        #expect(reads == 2)
+        #expect(gate.isLatched)
+
+        #expect(try gate.read(userInitiated: true, isUnlocked: { false }) { reads += 1; return .found(Data("x".utf8)) } == Data("x".utf8))
+        #expect(!gate.isLatched)
+        #expect(try gate.read(userInitiated: false, isUnlocked: { true }) { reads += 1; return .notFound } == nil)
+        #expect(reads == 4)
+    }
+}

@@ -28,7 +28,7 @@ struct CodexProvider: UsageProvider {
         Executable.exists("codex") || FileManager.default.fileExists(atPath: Self.authFile.path)
     }
 
-    func fetch() async throws -> Snapshot {
+    func fetch(userInitiated: Bool) async throws -> Snapshot {
         guard let data = try? Data(contentsOf: Self.authFile),
               let tokens = (try? JSONDecoder().decode(Auth.self, from: data))?.tokens
         else {
@@ -36,7 +36,7 @@ struct CodexProvider: UsageProvider {
         }
         let expiresAt = JWT(tokens.access_token)?.expiresAt
         if let expiresAt, expiresAt <= .now {
-            throw ProviderError.unauthorized("Sign-in expired. Run `codex` once to refresh it.")
+            throw ProviderError.signInExpired("Sign-in expired. Run `codex` once to refresh it.")
         }
         var headers = [
             "Authorization": "Bearer \(tokens.access_token)",
