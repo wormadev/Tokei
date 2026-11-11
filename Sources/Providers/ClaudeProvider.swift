@@ -15,8 +15,9 @@ struct ClaudeProvider: UsageProvider {
 
         var claudeAiOauth: OAuth?
 
+        /// No expiry recorded counts as unexpired; the API's 401 decides then.
         var isExpired: Bool {
-            guard let ms = claudeAiOauth?.expiresAt else { return true }
+            guard let ms = claudeAiOauth?.expiresAt else { return false }
             return Date(timeIntervalSince1970: ms / 1000) <= .now
         }
     }
@@ -80,7 +81,7 @@ struct ClaudeProvider: UsageProvider {
             usage = try await HTTP.json(
                 Usage.self, URLRequest("https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1", headers: headers), unauthorizedHint: hint
             )
-        } catch ProviderError.http(400), ProviderError.unauthorized {
+        } catch ProviderError.http(400), ProviderError.http(403), ProviderError.unauthorized {
             usage = try await HTTP.json(
                 Usage.self, URLRequest("https://api.anthropic.com/api/oauth/usage", headers: headers), unauthorizedHint: hint
             )
@@ -144,6 +145,7 @@ struct ClaudeProvider: UsageProvider {
         var cedar_ember: CedarEmber?
     }
 
+    /// Decodes leniently: it's an optional extra, so a shape change here must not fail usage.
     struct CedarEmber: Decodable {
         struct Grant: Decodable {
             var id: String?
@@ -152,26 +154,64 @@ struct ClaudeProvider: UsageProvider {
             var starts_at: String?
             var ends_at: String?
             var paused: Bool?
+            var clears: [String]?
+            var type: String?
+            var gives_back_weekly: Bool?
+
+            /// Claude Code's own derivation, so the names match what the CLI shows.
+            var kind: BankedResets.Kind {
+                if gives_back_weekly == true { return .fable }
+                if let type, let kind = BankedResets.Kind(rawValue: type) { return kind }
+                let clears = Set(clears ?? [])
+                if clears == ["five_hour"] { return .session }
+                if !clears.isEmpty, !clears.contains("five_hour") { return .weekly }
+                return .full
+            }
         }
+
+        /// Steps over a grant that didn't decode.
+        private struct Skip: Decodable {
+            init(from decoder: Decoder) {}
+        }
+
+        enum CodingKeys: String, CodingKey { case eligible, grants }
 
         var eligible: Bool?
         var grants: [Grant]?
-        var next_grant_id: String?
+
+        init(from decoder: Decoder) throws {
+            guard let container = try? decoder.container(keyedBy: CodingKeys.self) else { return }
+            eligible = try? container.decodeIfPresent(Bool.self, forKey: .eligible)
+            guard var list = try? container.nestedUnkeyedContainer(forKey: .grants) else { return }
+            var grants: [Grant] = []
+            while !list.isAtEnd {
+                if let grant = try? list.decode(Grant.self) {
+                    grants.append(grant)
+                } else if (try? list.decode(Skip.self)) == nil, (try? list.decodeNil()) != true {
+                    break
+                }
+            }
+            self.grants = grants
+        }
     }
 
-    /// Counts resets in grants that are live now: not paused, started, not expired.
-    static func banked(_ cedar: CedarEmber?, now: Date = .now) -> BankedResets? {
-        guard let cedar, cedar.eligible != false else { return nil }
+    /// One entry per kind, in `Kind` order. Live grants only: not paused, started, not expired,
+    /// with resets left or usable now. The Reset spends the first usable grant of that kind.
+    static func banked(_ cedar: CedarEmber?, now: Date = .now) -> [BankedResets] {
+        guard let cedar, cedar.eligible != false else { return [] }
         let live = (cedar.grants ?? []).filter { grant in
-            guard grant.paused != true, (grant.resets_left ?? 0) > 0 else { return false }
+            guard grant.paused != true, (grant.resets_left ?? 0) > 0 || grant.usable_now == true else { return false }
             if let start = ISODate.parse(grant.starts_at), start > now { return false }
             if let end = ISODate.parse(grant.ends_at), end <= now { return false }
             return true
         }
-        let count = live.reduce(0) { $0 + ($1.resets_left ?? 0) }
-        guard count > 0 else { return nil }
-        let next = live.first { $0.id != nil && $0.id == cedar.next_grant_id && $0.usable_now == true }
-        return BankedResets(count: count, nextExpiry: live.compactMap { ISODate.parse($0.ends_at) }.min(), grantID: next?.id)
+        return BankedResets.Kind.allCases.compactMap { kind in
+            let grants = live.filter { $0.kind == kind }
+            let count = grants.reduce(0) { $0 + ($1.resets_left ?? 0) }
+            guard count > 0 else { return nil }
+            let next = grants.first { $0.id != nil && $0.usable_now == true }
+            return BankedResets(kind: kind, count: count, nextExpiry: grants.compactMap { ISODate.parse($0.ends_at) }.min(), grantID: next?.id)
+        }
     }
 
     /// Spends one banked reset. Each call gets a fresh request id, so it's one claim per click.
@@ -232,7 +272,7 @@ struct ClaudeProvider: UsageProvider {
     }
 
     static func snapshot(usage: Usage, profile: Profile?, oauth: Credentials.OAuth, now: Date = .now) -> Snapshot {
-        let windows = usage.limits.map(windows(from:)).flatMap { $0.isEmpty ? nil : $0 } ?? legacyWindows(usage)
+        let windows = (usage.limits.map(windows(from:)).flatMap { $0.isEmpty ? nil : $0 } ?? legacyWindows(usage)).withUniqueIDs()
         var details: [Detail] = []
         if let extra = usage.extra_usage, extra.is_enabled == true, let used = extra.used_credits {
             let limit = extra.monthly_limit.map { " of \(Money.usd(cents: $0))" } ?? ""
@@ -248,7 +288,7 @@ struct ClaudeProvider: UsageProvider {
             windows: windows,
             account: Account(user: user, plan: plan(subscription: oauth.subscriptionType, tier: oauth.rateLimitTier)),
             details: details,
-            banked: banked(usage.cedar_ember, now: now),
+            resets: banked(usage.cedar_ember, now: now),
             fetchedAt: now
         )
     }

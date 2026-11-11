@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Unit tests use the app as host: no status item, no live fetches, no Keychain.
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return }
         Prefs.registerDefaults()
+        NSApp.mainMenu = Self.mainMenu()
         refresher = Refresher(providers: [
             ClaudeProvider(), CodexProvider(),
         ])
@@ -46,5 +47,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if UserDefaults.standard.bool(forKey: "debugShowSettings") { settings.show() }
         }
         #endif
+    }
+
+    /// Never shown (accessory app), but its key equivalents are what make ⌘W, ⌘Q and ⌘C work in Settings.
+    private static func mainMenu() -> NSMenu {
+        let app = NSMenu(title: "Tokei")
+        app.addItem(withTitle: "Quit Tokei", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        let window = NSMenu(title: "Window")
+        window.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        window.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        let main = NSMenu()
+        for menu in [app, edit, window] {
+            main.addItem(withTitle: menu.title, action: nil, keyEquivalent: "").submenu = menu
+        }
+        return main
     }
 }

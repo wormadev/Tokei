@@ -27,11 +27,30 @@ private func snapshot(used: Double, at date: Date) -> Snapshot {
     Snapshot(windows: [UsageWindow(id: "session", label: "Session", kind: .primary, used: used)], account: Account(), fetchedAt: date)
 }
 
+/// The test host is the real app, so UserDefaults.standard holds the developer's own settings and
+/// registerDefaults never ran. The argument domain outranks both and is never written to disk.
+@MainActor
+private func useTestDefaults() {
+    let defaults = UserDefaults.standard
+    var arguments = defaults.volatileDomain(forName: UserDefaults.argumentDomain)
+    for id in ProviderID.allCases { arguments[Prefs.enabledKey(id)] = true }
+    arguments[Prefs.showStatusKey] = false
+    arguments[Prefs.refreshIntervalKey] = Prefs.agentAwareInterval
+    defaults.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
+}
+
+private func tempStore() -> StateStore {
+    StateStore(url: URL.temporaryDirectory.appending(path: "tokei-test-\(UUID().uuidString).json"))
+}
+
 @MainActor
 struct RefresherTests {
-    private func makeRefresher() -> Refresher {
-        let store = StateStore(url: URL.temporaryDirectory.appending(path: "quota-test-\(UUID().uuidString).json"))
-        return Refresher(providers: [StubProvider(id: .claude)], store: store)
+    init() {
+        useTestDefaults()
+    }
+
+    private func makeRefresher(store: StateStore = tempStore()) -> Refresher {
+        Refresher(providers: [StubProvider(id: .claude)], store: store)
     }
 
     @Test func `error keeps the last good snapshot`() {
@@ -133,7 +152,57 @@ struct RefresherTests {
         let store = StateStore(url: URL.temporaryDirectory.appending(path: "tokei-test-\(UUID().uuidString).json"))
         let refresher = Refresher(providers: [StubProvider(id: .claude), StubProvider(id: .codex, installed: false)], store: store)
         #expect(refresher.installed == [.claude])
-        #expect(!refresher.enabled.contains(.codex))
+        #expect(refresher.enabled == [.claude])
+    }
+
+    @Test func `opening the panel waits out a 429 but retries other failures`() async throws {
+        let provider = CountingProvider()
+        let refresher = Refresher(providers: [provider], store: tempStore())
+        let then = Date.now.addingTimeInterval(-200)
+        refresher.apply(.failure(ProviderError.rateLimited(retryAfter: 3600)), to: .claude, now: then)
+        refresher.refreshStale()
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(provider.fetches.withLock { $0 } == 0)
+
+        refresher.apply(.failure(URLError(.notConnectedToInternet)), to: .claude, now: then)
+        #expect(try #require(refresher.states[.claude]?.retryAt) > .now)
+        refresher.refreshStale()
+        for _ in 0 ..< 30 where provider.fetches.withLock({ $0 }) == 0 {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        #expect(provider.fetches.withLock { $0 } == 1)
+    }
+
+    @Test func `reset alerts only for snapshots fetched this launch, recently, on the same account`() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let window = { (used: Double, resets: TimeInterval) in
+            UsageWindow(id: "session", label: "Session", kind: .primary, used: used, resetsAt: now.addingTimeInterval(resets), duration: 5 * 3600)
+        }
+        let snap = { (used: Double, resets: TimeInterval, at: TimeInterval, user: String) in
+            Snapshot(windows: [window(used, resets)], account: Account(user: user), fetchedAt: now.addingTimeInterval(at))
+        }
+        var alerts = 0
+
+        let refresher = makeRefresher()
+        refresher.onReset = { _, _ in alerts += 1 }
+        refresher.apply(.success(snap(0.6, 60, -3600, "a")), to: .claude, now: now.addingTimeInterval(-3600))
+        refresher.apply(.success(snap(0, 5 * 3600 + 60, 0, "a")), to: .claude, now: now)
+        #expect(alerts == 1)
+
+        refresher.apply(.success(snap(0.6, 5 * 3600 + 60, 0, "a")), to: .claude, now: now)
+        refresher.apply(.success(snap(0, 10 * 3600 + 60, 6 * 3600, "b")), to: .claude, now: now.addingTimeInterval(6 * 3600))
+        #expect(alerts == 1)
+
+        refresher.apply(.success(snap(0.6, 10 * 3600 + 60, 6 * 3600, "b")), to: .claude, now: now.addingTimeInterval(6 * 3600))
+        refresher.apply(.success(snap(0, 20 * 3600, 12 * 3600, "b")), to: .claude, now: now.addingTimeInterval(12 * 3600))
+        #expect(alerts == 1)
+
+        let store = tempStore()
+        store.save(.init(states: [.claude: ProviderState(snapshot: snap(0.6, -60, -3600, "a"))], history: History()))
+        let relaunched = makeRefresher(store: store)
+        relaunched.onReset = { _, _ in alerts += 1 }
+        relaunched.apply(.success(snap(0, 5 * 3600 - 60, 0, "a")), to: .claude, now: now)
+        #expect(alerts == 1)
     }
 
     @Test func `due after interval, and after retryAt when failing`() {

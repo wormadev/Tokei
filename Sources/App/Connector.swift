@@ -23,13 +23,18 @@ final class Connector {
         redeeming.insert(id)
         notices[id] = nil
         Task {
-            defer { redeeming.remove(id) }
+            let notice: String
             do {
-                notices[id] = try await ClaudeProvider.redeem(grantID: grantID)
+                notice = try await ClaudeProvider.redeem(grantID: grantID)
             } catch {
-                notices[id] = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                notice = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }
+            notices[id] = notice
             await refresher.refreshAfterCurrent(id)
+            redeeming.remove(id)
+            // By now the card shows the new numbers; the notice has done its job.
+            try? await Task.sleep(for: .seconds(60))
+            if notices[id] == notice { notices[id] = nil }
         }
     }
 
@@ -40,7 +45,7 @@ final class Connector {
         .codex: ("codex", ["login", "status"]),
     ]
 
-    /// True when the sign-in works again afterwards.
+    /// False when the sign-in is known to still be broken afterwards.
     @discardableResult
     func renewSignIn(_ id: ProviderID) async -> Bool {
         guard let command = Self.statusCommands[id], !renewing.contains(id) else { return false }
@@ -58,6 +63,8 @@ final class Connector {
             return false
         }
         await refresher.refreshAfterCurrent(id)
+        // A 429 says nothing about the sign-in either way: no failure, no notification.
+        if refresher.states[id]?.rateLimited == true { return true }
         guard refresher.states[id]?.needsSignIn != true else {
             renewFailures[id] = ("Still expired. Open Terminal to run \(command.cli), then quit it with /exit.", .now)
             return false
@@ -90,6 +97,7 @@ final class Connector {
             defer { renewing.remove(id) }
             for _ in 0 ..< 8 {
                 try? await Task.sleep(for: .seconds(15))
+                if let state = refresher.states[id], state.rateLimited == true, let retryAt = state.retryAt, retryAt > .now { continue }
                 await refresher.refreshAfterCurrent(id)
                 if refresher.states[id]?.needsSignIn != true { return }
             }

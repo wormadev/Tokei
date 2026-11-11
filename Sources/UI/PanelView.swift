@@ -1,10 +1,19 @@
 import Combine
 import SwiftUI
 
+/// Set on each open from the status item's screen, which can differ from NSScreen.main.
+@MainActor
+@Observable
+final class PanelLayout {
+    var maxHeight: CGFloat = (NSScreen.main?.visibleFrame.height ?? 800) - 80
+}
+
 struct PanelView: View {
     let refresher: Refresher
     let connector: Connector
+    let layout: PanelLayout
     let openSettings: () -> Void
+    let checkForUpdates: () -> Void
     /// `refresher.enabled` reads UserDefaults, which SwiftUI doesn't observe; bump on any change.
     @State private var defaultsChanges = 0
 
@@ -28,7 +37,7 @@ struct PanelView: View {
                 .scrollBounceBehavior(.basedOnSize)
                 .scrollIndicators(.automatic)
                 // Grow with content, scroll only once the panel would run off screen.
-                .frame(maxHeight: (NSScreen.main?.visibleFrame.height ?? 800) - 80)
+                .frame(maxHeight: layout.maxHeight)
             }
         }
         .padding(12)
@@ -43,7 +52,7 @@ struct PanelView: View {
             Text("Tokei").font(.headline)
             Spacer()
             if let version = Updater.shared.availableVersion {
-                Button("Update to \(version)") { Updater.shared.checkForUpdates() }
+                Button("Update to \(version)", action: checkForUpdates)
                     .font(.callout)
                     .help("Tokei \(version) is available")
             }
@@ -54,10 +63,11 @@ struct PanelView: View {
             }
             .keyboardShortcut("r")
             .help("Refresh now (⌘R)")
+            .accessibilityLabel("Refresh")
             Menu {
                 Button("Settings…", action: openSettings).keyboardShortcut(",")
                 if Updater.shared.isConfigured {
-                    Button("Check for Updates…") { Updater.shared.checkForUpdates() }
+                    Button("Check for Updates…", action: checkForUpdates)
                 }
                 Divider()
                 Button("Quit Tokei") { NSApp.terminate(nil) }.keyboardShortcut("q")
@@ -66,6 +76,7 @@ struct PanelView: View {
             }
             .menuIndicator(.hidden)
             .fixedSize()
+            .accessibilityLabel("Settings")
         }
         .buttonStyle(.borderless)
         .padding(.horizontal, 4)
@@ -115,7 +126,7 @@ struct ProviderCard: View {
                     )
                 }
                 // Always shown: a banked reset is the one number you can act on.
-                if let banked = snapshot.banked {
+                ForEach(snapshot.resets ?? [], id: \.kind) { banked in
                     BankedRow(id: id, banked: banked, connector: connector, now: now)
                 }
                 if let notice = connector.notices[id] {
@@ -231,7 +242,7 @@ struct BankedRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "arrow.counterclockwise.circle")
-            Text(confirming ? "Reset limits now?" : banked.text(now: now))
+            Text(confirming ? banked.kind.map { "Use a \($0.noun)?" } ?? "Reset limits now?" : banked.text(now: now))
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer(minLength: 0)
@@ -250,7 +261,7 @@ struct BankedRow: View {
                 } else {
                     Button("Reset") { confirming = true }
                         .foregroundStyle(.tint)
-                        .help("Resets your session and weekly limits now")
+                        .help(banked.kind?.help ?? "Resets your session and weekly limits now")
                 }
             }
         }
@@ -299,7 +310,7 @@ struct WindowRow: View {
             if hasReset {
                 Capsule().fill(.fill.tertiary).frame(height: 8)
             } else {
-                UsageBar(used: window.used, display: display, pace: pace)
+                UsageBar(label: window.label, used: window.used, display: display, pace: pace)
             }
             HStack(alignment: .firstTextBaseline) {
                 if hasReset, let resets = window.resetsAt {
@@ -343,6 +354,7 @@ struct WindowRow: View {
 }
 
 struct UsageBar: View {
+    let label: String
     let used: Double
     var display: UsageDisplay = .used
     var pace: Pace?
@@ -366,6 +378,7 @@ struct UsageBar: View {
         }
         .frame(height: 8)
         .accessibilityElement()
+        .accessibilityLabel(label)
         .accessibilityValue("\(Int((used * 100).rounded())) percent used")
     }
 }

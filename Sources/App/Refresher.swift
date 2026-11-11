@@ -12,6 +12,8 @@ struct ProviderState: Codable, Equatable {
     var lastAttempt: Date?
     /// Earliest next background attempt after a failure or 429.
     var retryAt: Date?
+    /// The last failure was a 429: only then does retryAt hold for panel opens and sign-in checks.
+    var rateLimited: Bool?
 
     /// Only the user can fix this one, so the menu bar flags it.
     var needsSignIn: Bool { error != nil && transient != true }
@@ -36,6 +38,9 @@ final class Refresher {
     @ObservationIgnored private let store: StateStore
     @ObservationIgnored private var loop: Task<Void, Never>?
     @ObservationIgnored private var running: [ProviderID: Task<Void, Never>] = [:]
+    @ObservationIgnored private var fetchingStatus: Set<ProviderID> = []
+    /// Snapshots loaded from disk may be days old; resets seen against them aren't news.
+    @ObservationIgnored private var fetchedThisLaunch: Set<ProviderID> = []
     /// Separate flags: waking usually lands on the lock screen, which must stay paused.
     @ObservationIgnored private let activity = AgentActivity()
     @ObservationIgnored private var asleep = false
@@ -89,7 +94,8 @@ final class Refresher {
         detectInstalled()
         let now = Date.now
         for id in enabled where (states[id]?.lastAttempt).map({ now.timeIntervalSince($0) > maxAge }) ?? true {
-            if let retryAt = states[id]?.retryAt, retryAt > now { continue }
+            // Other failures (no network after wake) are worth retrying right away.
+            if let state = states[id], state.rateLimited == true, let retryAt = state.retryAt, retryAt > now { continue }
             Task { await refresh(id) }
         }
     }
@@ -126,8 +132,15 @@ final class Refresher {
         if let running = running[id] { return await running.value }
         guard let provider = providers[id] else { return }
         refreshing.insert(id)
+        // Untracked: a slow status page must not hold the spinner or the usage result.
+        if !fetchingStatus.contains(id) {
+            fetchingStatus.insert(id)
+            Task {
+                await refreshStatus(id)
+                fetchingStatus.remove(id)
+            }
+        }
         let task = Task {
-            async let status: Void = refreshStatus(id)
             let result: Result<Snapshot, Error>
             do {
                 result = try .success(await provider.fetch())
@@ -135,7 +148,6 @@ final class Refresher {
                 result = .failure(error)
             }
             apply(result, to: id, now: .now)
-            await status
             // Inside the task, so anyone awaiting it finds the slot free for a new refresh.
             running[id] = nil
             refreshing.remove(id)
@@ -169,14 +181,20 @@ final class Refresher {
         state.lastAttempt = now
         switch result {
         case let .success(snapshot):
-            if let old = state.snapshot {
-                for window in Self.resets(old: old, new: snapshot) { onReset?(id, window) }
+            // A different account's numbers dropping isn't a reset.
+            if let old = state.snapshot, old.account.user == snapshot.account.user {
+                let fromDisk = !fetchedThisLaunch.contains(id)
+                for window in Self.resets(old: old, new: snapshot) where !Self.isOld(window, old: old, fromDisk: fromDisk, now: now) {
+                    onReset?(id, window)
+                }
             }
+            fetchedThisLaunch.insert(id)
             state.snapshot = snapshot
             state.error = nil
             state.transient = nil
             state.failures = 0
             state.retryAt = nil
+            state.rateLimited = nil
             history.record(id, snapshot: snapshot)
         case let .failure(error):
             // Signed out or credentials gone: old numbers would belong to a different (or no) account.
@@ -191,6 +209,7 @@ final class Refresher {
                 state.error = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }
             state.retryAt = now.addingTimeInterval(Self.backoff(error: error, failures: state.failures))
+            if case .rateLimited? = error as? ProviderError { state.rateLimited = true } else { state.rateLimited = nil }
             if case .unauthorized(let hint)? = error as? ProviderError, !neededSignIn { onSignInExpired?(id, hint) }
         }
         states[id] = state
@@ -208,6 +227,14 @@ final class Refresher {
             else { return false }
             return newReset.timeIntervalSince(oldReset) > 10 * 60
         }
+    }
+
+    /// The reset happened while Tokei was quit or asleep: the old snapshot is more than a window
+    /// old, or it came from disk and its reset time had already passed by this first fetch.
+    nonisolated static func isOld(_ window: UsageWindow, old: Snapshot, fromDisk: Bool, now: Date) -> Bool {
+        if let duration = window.duration, now.timeIntervalSince(old.fetchedAt) > duration { return true }
+        guard fromDisk, let oldReset = old.windows.first(where: { $0.id == window.id })?.resetsAt else { return false }
+        return oldReset <= now
     }
 
     func clear(_ id: ProviderID) {

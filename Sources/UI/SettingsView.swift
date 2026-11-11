@@ -25,6 +25,7 @@ final class SettingsWindowController {
             window.center()
             self.window = window
         }
+        if window?.isMiniaturized == true { window?.deminiaturize(nil) }
         NSApp.activate()
         // Accessory apps can be refused activation (cooperative activation); still come to front.
         window?.orderFrontRegardless()
@@ -106,11 +107,16 @@ private struct ProviderSidebarRow: View {
             Spacer()
             if installed, enabled {
                 Circle()
-                    .fill(state?.error == nil && state?.snapshot != nil ? Color.green : Color.orange)
+                    .fill(working ? Color.green : Color.orange)
                     .frame(width: 6, height: 6)
+                    .help(working ? "Working" : "Needs attention")
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(installed && enabled ? (working ? "Working" : "Needs attention") : "")
     }
+
+    private var working: Bool { state?.error == nil && state?.snapshot != nil }
 }
 
 private struct GeneralSettings: View {
@@ -123,7 +129,9 @@ private struct GeneralSettings: View {
     @AppStorage(Prefs.menuBarSessionKey) private var menuBarSession = true
     @AppStorage(Prefs.menuBarIconKey) private var menuBarIcon = MenuBarIcon.tokei
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var loginStatus = SMAppService.mainApp.status
     @State private var loginError: String?
+    @State private var revertingLogin = false
 
     private static let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
 
@@ -184,16 +192,29 @@ private struct GeneralSettings: View {
             Section {
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, on in
+                        // Putting the toggle back after a failure must not run the opposite call.
+                        if revertingLogin {
+                            revertingLogin = false
+                            return
+                        }
                         do {
                             if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
                             loginError = nil
                         } catch {
                             loginError = error.localizedDescription
-                            launchAtLogin = SMAppService.mainApp.status == .enabled
+                            let enabled = SMAppService.mainApp.status == .enabled
+                            if enabled != on {
+                                revertingLogin = true
+                                launchAtLogin = enabled
+                            }
                         }
+                        loginStatus = SMAppService.mainApp.status
                     }
                 if let loginError {
                     Text(loginError).font(.caption).foregroundStyle(.red)
+                }
+                if loginStatus == .requiresApproval {
+                    Text("Allow Tokei in System Settings > General > Login Items.").font(.caption).foregroundStyle(.secondary)
                 }
             }
             if Updater.shared.isConfigured {

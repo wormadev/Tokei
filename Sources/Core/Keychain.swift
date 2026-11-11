@@ -13,7 +13,13 @@ enum Keychain {
         process.standardOutput = output
         process.standardError = FileHandle.nullDevice
         guard (try? process.run()) != nil else { return nil }
+        // A Keychain dialog can keep the tool waiting forever. Killing it ends the read below.
+        let deadline = DispatchWorkItem {
+            if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+        }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 5, execute: deadline)
         let data = output.fileHandleForReading.readDataToEndOfFile()
+        deadline.cancel()
         process.waitUntilExit()
         guard process.terminationStatus == 0 else { return nil }
         let trimmed = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
