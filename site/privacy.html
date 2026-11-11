@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Privacy Policy: Tokei</title>
 <meta name="description" content="Tokei talks only to the AI providers you use. No accounts, no tracking; an anonymous install count only if you opt in.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Privacy Policy: Tokei">
+<meta property="og:description" content="Tokei talks only to the AI providers you use. No accounts, no tracking; an anonymous install count only if you opt in.">
+<meta property="og:url" content="https://tokei.worma.dev/privacy.html">
+<meta property="og:image" content="https://tokei.worma.dev/img/tokei-poster.jpg?v=2">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Privacy Policy: Tokei">
+<meta name="twitter:description" content="Tokei talks only to the AI providers you use. No accounts, no tracking; an anonymous install count only if you opt in.">
+<meta name="twitter:image" content="https://tokei.worma.dev/img/tokei-poster.jpg?v=2">
 <link rel="icon" href="img/icon.png?v=2" type="image/png">
 <link rel="preload" href="fonts/fraunces.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css?v=2">
@@ -28,7 +37,7 @@
 
 <main class="legal">
   <h1>Privacy Policy</h1>
-  <p class="fine">Effective date: 2026-10-24 (install count added in version 0.1.1)</p>
+  <p class="fine">Effective date: 2026-11-11 (install count added in version 0.1.1)</p>
 
   <p>Tokei is a macOS menu bar app, published by wormadev, that shows how much of your Claude and Codex plans you have used. This policy describes what the app does with your data.</p>
 
@@ -42,7 +51,7 @@
 
   <h2>What Tokei reads</h2>
   <ul>
-    <li><strong>Claude:</strong> the sign-in Claude Code saved in <code>~/.claude/.credentials.json</code>, or, after you click Connect in Settings, the <code>Claude Code-credentials</code> item in your Keychain.</li>
+    <li><strong>Claude:</strong> the sign-in Claude Code saved in <code>~/.claude/.credentials.json</code> (or <code>$CLAUDE_CONFIG_DIR/.credentials.json</code>) while it's current, otherwise the <code>Claude Code-credentials</code> item in your Keychain, read through macOS's <code>security</code> tool.</li>
     <li><strong>Codex:</strong> the sign-in Codex saved in <code>~/.codex/auth.json</code> (or <code>$CODEX_HOME/auth.json</code>).</li>
   </ul>
   <p>Tokei never refreshes, changes or stores these tokens anywhere else.</p>
@@ -62,9 +71,9 @@
   <p>Off unless you turn it on, either with "Include anonymous system profile" when Tokei first asks about updates, or with Share anonymous install count in Settings &gt; General. When it's on, each update check also sends:</p>
   <ul>
     <li>a random ID created on your Mac, not tied to you or your accounts;</li>
-    <li>Sparkle's anonymous system profile, at most once a week: app build, macOS version, CPU type, Mac model, memory and language.</li>
+    <li>Sparkle's anonymous system profile, at most once a week: app name and build, macOS version, CPU type, subtype, count, speed and whether it's 64-bit, Mac model, memory and preferred language.</li>
   </ul>
-  <p>tokei.worma.dev keeps only the ID, the app build, the macOS version and the CPU type, per day, to count how many Macs run Tokei. It doesn't store IP addresses, and the model, memory and language are discarded. The totals are public at <a href="https://tokei.worma.dev/api/stats">tokei.worma.dev/api/stats</a>. Turn it off in Settings and nothing more is sent.</p>
+  <p>tokei.worma.dev keeps only the ID, the app build, the macOS version and the CPU type, per day, to count how many Macs run Tokei. It doesn't store IP addresses, and the rest of the profile is discarded. Requests to tokei.worma.dev pass through Cloudflare, which acts as its proxy and processes your IP address to deliver them. The totals are public at <a href="https://tokei.worma.dev/api/stats">tokei.worma.dev/api/stats</a>. Turn it off in Settings and nothing more is sent.</p>
 
   <h2>Notifications</h2>
   <p>If you allow them, reset notifications are created on your Mac. Nothing is sent to a push service.</p>

@@ -28,7 +28,7 @@ brew install --cask wormadev/tap/tokei
 
 **Download**
 
-Get [Tokei.dmg](https://github.com/wormadev/Tokei/releases/latest/download/Tokei.dmg) and drag Tokei to Applications. Tokei isn't notarized by Apple yet, so the first launch needs one extra step: open Tokei, then go to **System Settings > Privacy & Security** and click **Open Anyway**. (The Homebrew cask clears that flag for you.)
+Get [Tokei.dmg](https://github.com/wormadev/Tokei/releases/latest/download/Tokei.dmg) and drag Tokei to Applications. It's signed with a Developer ID and notarized by Apple, so it opens like any other app.
 
 Requires macOS 26 or later. Updates install from the app: right-click the menu bar icon > **Check for Updates…**.
 
@@ -37,7 +37,7 @@ Requires macOS 26 or later. Updates install from the app: right-click the menu b
 Sign in to [Claude Code](https://docs.anthropic.com/en/docs/claude-code) or [Codex](https://github.com/openai/codex) once, if you haven't. Tokei reads the sign-in they already saved; there is nothing to configure.
 
 - **Click** the menu bar icon for the panel. **Right-click** for Refresh, Settings, Check for Updates and Quit.
-- Claude Code may keep its sign-in in the Keychain. Tokei reads it only after you click **Connect** in Settings > Claude.
+- Claude Code may keep its sign-in in the Keychain. Tokei reads it through macOS's `security` tool, which Claude Code's item already trusts, so there's no prompt.
 
 ## Features
 
