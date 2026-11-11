@@ -23,6 +23,7 @@ permissions:
 jobs:
   release:
     runs-on: macos-26
+    timeout-minutes: 30
     steps:
       - name: Check secrets
         env:
@@ -41,13 +42,20 @@ jobs:
           exit $missing
 
       # Build number is main's commit count and the version comes from tags: full history.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
 
-      - run: brew install xcodegen
+      # Pinned release zip: brew always installs the latest.
+      - name: Install XcodeGen
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip
+          echo "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
 
       - name: Signing keychain
         env:
@@ -81,15 +89,16 @@ jobs:
 
       - name: Release
         env:
-          # Also pushes the cask to wormadev/homebrew-tap, which GITHUB_TOKEN can't reach.
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          # Also pushes the cask to wormadev/homebrew-tap, which GITHUB_TOKEN can't reach. release.sh
+          # unexports it and hands it only to gh and git push.
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
           NOTARY_ISSUER: ${{ secrets.NOTARY_ISSUER }}
           PUBLISH: ${{ github.event_name == 'push' || inputs.publish }}
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          gh auth setup-git
+          GH_TOKEN="$RELEASE_TOKEN" gh auth setup-git
           if [[ "$PUBLISH" == true ]]; then
             scripts/release.sh --publish
           else
@@ -101,5 +110,5 @@ jobs:
       - name: Clean up
         if: always()
         run: |
-          rm -f "$RUNNER_TEMP/sparkle_ed_key" "$RUNNER_TEMP/notary_key.p8"
+          rm -f "$RUNNER_TEMP/sparkle_ed_key" "$RUNNER_TEMP/notary_key.p8" "$RUNNER_TEMP/cert.p12"
           security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true

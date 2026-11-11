@@ -17,6 +17,6 @@ codesign --verify --deep --strict "$APP"
 
 mkdir -p "$OUT"
 rm -f "$DMG"
-uvx --from "dmgbuild==1.6.7" dmgbuild -s "$REPO/scripts/dmg-settings.py" -D app="$APP" Tokei "$DMG"
+uvx --from "dmgbuild==1.6.7" --with "ds-store==1.3.3" --with "mac-alias==2.2.3" dmgbuild -s "$REPO/scripts/dmg-settings.py" -D app="$APP" Tokei "$DMG"
 hdiutil verify "$DMG" >/dev/null
 echo "$DMG"
