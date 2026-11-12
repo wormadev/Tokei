@@ -72,3 +72,17 @@ Needs a decision
 - [x] Homebrew cask still strips quarantine (other repo)
 - [x] main protected, CI checks `app` and `server` required (they first run on the PR that adds ci.yml)
 - [ ] Dokploy: Requests logging off for tokei-server; origin reachable only via Cloudflare; uptime monitor on /api/appcast.xml
+
+## Polish (Nov 2026)
+- [x] Panel open always refreshes (10 s floor, 429 respected)
+- [x] Banked resets: per kind (Fable apart), confirmation dialog, show/hide toggle
+- [x] Menu bar: provider, any 1-2 limits, rings or bars, percentages, logo
+- [x] Copy pass: expired sign-in, notifications, settings footers
+- [ ] Check a real Fable reset spend (grant grouping verified only against T3 Code's fixtures)
+- [x] Request id reused until settled (Claude and Codex); Codex resets spendable
+- [x] Unstarted session shows as Not started; weekly-only plans get no session row
+- [x] Notifications: 80/95/100%, pace run-out, unused weekly quota, banked expiry; click opens panel
+- [x] Menu bar: one item per provider, highest usage; global shortcut
+- [x] Codex per-model limits (`additional_rate_limits`), Low Power refresh floor, countdown rounding
+- [x] Screenshots, promo video and GIF refreshed
+- [ ] Check a real Codex reset spend (endpoint from the Codex CLI source, not exercised)

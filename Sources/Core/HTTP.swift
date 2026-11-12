@@ -115,3 +115,12 @@ struct FlexibleDouble: Decodable, Sendable {
         }
     }
 }
+
+/// Decodes to nil instead of failing the whole response.
+struct Lossy<T: Decodable & Sendable>: Decodable, Sendable {
+    let value: T?
+
+    init(from decoder: Decoder) throws {
+        value = try? T(from: decoder)
+    }
+}

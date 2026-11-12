@@ -68,6 +68,24 @@ struct ClaudeParsingTests {
         #expect(expired.isExpired)
     }
 
+    @Test func `a session without a number is not started, a weekly-only plan gets no session, percent may be a string`() throws {
+        let oauth = ClaudeProvider.Credentials.OAuth(accessToken: "x", expiresAt: nil, subscriptionType: "max", rateLimitTier: nil)
+        let started = try decode(ClaudeProvider.Usage.self, """
+        {"limits":[{"kind":"session","percent":null,"resets_at":null},{"kind":"weekly_all","percent":"47","resets_at":null}]}
+        """)
+        let windows = ClaudeProvider.snapshot(usage: started, profile: nil, oauth: oauth).windows
+        #expect(windows.map(\.id) == ["session", "weekly"])
+        #expect(windows[0].used == 0)
+        #expect(windows[0].resetsAt == nil)
+        #expect(windows[1].used == 0.47)
+
+        let weeklyOnly = try decode(ClaudeProvider.Usage.self, #"{"limits":[{"kind":"weekly_all","percent":10}]}"#)
+        #expect(ClaudeProvider.snapshot(usage: weeklyOnly, profile: nil, oauth: oauth).windows.map(\.id) == ["weekly"])
+
+        let legacy = try decode(ClaudeProvider.Usage.self, #"{"five_hour":{"utilization":null,"resets_at":null},"seven_day":{"utilization":5}}"#)
+        #expect(ClaudeProvider.snapshot(usage: legacy, profile: nil, oauth: oauth).windows.map(\.id) == ["session", "weekly"])
+    }
+
     @Test func `version folder names are recognized`() {
         #expect(ClaudeProvider.isVersion("2.1.306"))
         #expect(!ClaudeProvider.isVersion("claude"))
@@ -121,6 +139,22 @@ struct CodexParsingTests {
         let windows = CodexProvider.snapshot(usage: usage, idToken: nil).windows
         #expect(windows.map(\.id) == ["weekly", "weekly-2"])
         #expect(windows.map(\.label) == ["Weekly", "Monthly"])
+    }
+
+    @Test func `per-model limits become secondary windows, and a bad shape there is ignored`() throws {
+        let usage = try decode(CodexProvider.Usage.self, """
+        {"rate_limit":{"primary_window":{"used_percent":20,"limit_window_seconds":18000,"reset_at":1800000000}},
+         "additional_rate_limits":[{"limit_name":"GPT Spark","rate_limit":{
+            "primary_window":{"used_percent":5,"limit_window_seconds":18000},
+            "secondary_window":{"used_percent":40,"limit_window_seconds":604800}}}]}
+        """)
+        let windows = CodexProvider.snapshot(usage: usage, idToken: nil).windows
+        #expect(windows.map(\.id) == ["session", "gpt-spark-session", "gpt-spark-weekly"])
+        #expect(windows.map(\.label) == ["Session", "GPT Spark session", "GPT Spark weekly"])
+        #expect(windows[2].kind == .secondary)
+
+        let odd = try decode(CodexProvider.Usage.self, #"{"rate_limit":{"primary_window":{"used_percent":20}},"additional_rate_limits":{"oops":1}}"#)
+        #expect(CodexProvider.snapshot(usage: odd, idToken: nil).windows.count == 1)
     }
 
     @Test func `reads email from id token claims`() {
@@ -187,6 +221,22 @@ struct BankedResetTests {
         #expect(ClaudeProvider.banked(nil, now: now).isEmpty)
     }
 
+    @Test func `claude groups grants by kind, fable apart, each with its own grant to spend`() throws {
+        let cedar = try decode(ClaudeProvider.CedarEmber.self, """
+        {"eligible":true,"next_grant_id":"weekly_a","grants":[
+          {"id":"weekly_a","resets_left":1,"clears":["seven_day"],"usable_now":true},
+          {"id":"fable_a","resets_left":1,"clears":["seven_day_overage_included"],"gives_back_weekly":true,"usable_now":true,"ends_at":"2027-03-09T07:59:00Z"},
+          {"id":"fable_b","resets_left":2,"gives_back_weekly":true,"type":"weekly","usable_now":true},
+          {"id":"session_a","resets_left":1,"type":"session","usable_now":true},
+          {"id":"full_a","resets_left":4,"clears":["five_hour","seven_day"],"usable_now":true}]}
+        """)
+        let banked = ClaudeProvider.banked(cedar, now: now)
+        #expect(banked.map(\.kind) == [.session, .weekly, .fable, .full])
+        #expect(banked.map(\.count) == [1, 1, 3, 4])
+        #expect(banked.map(\.grantID) == ["session_a", "weekly_a", "fable_a", "full_a"])
+        #expect(banked[2].nextExpiry == ISODate.parse("2027-03-09T07:59:00Z"))
+    }
+
     @Test func `claude grant kinds follow the CLI`() throws {
         let cedar = try decode(ClaudeProvider.CedarEmber.self, """
         {"grants":[
@@ -214,8 +264,8 @@ struct BankedResetTests {
         #expect(banked.map(\.kind) == [.weekly, .fable])
         #expect(banked[0] == BankedResets(kind: .weekly, count: 1, nextExpiry: ISODate.parse("2026-10-21T14:00:00Z"), grantID: "w1"))
         #expect(banked[1] == BankedResets(kind: .fable, count: 2, nextExpiry: ISODate.parse("2026-11-03T00:00:00Z"), grantID: "f2"))
-        #expect(banked[1].text(now: now).hasPrefix("2 Fable resets · next expires "))
-        #expect(banked[0].text(now: now).hasPrefix("1 weekly reset · expires "))
+        #expect(banked[1].detail(now: now).hasPrefix("2 left · next expires "))
+        #expect(banked[0].detail(now: now).hasPrefix("1 left · expires "))
     }
 
     @Test func `a malformed grant is skipped and a malformed cedar_ember never fails usage`() throws {
@@ -240,8 +290,9 @@ struct BankedResetTests {
         let banked = try #require(ClaudeProvider.banked(cedar, now: now).first)
         #expect(banked.count == 1)
         #expect(banked.grantID == nil)
-        #expect(ClaudeProvider.claimMessage("reset").hasPrefix("Limits reset"))
-        #expect(ClaudeProvider.claimMessage("something_new").contains("couldn't confirm"))
+        #expect(ClaudeProvider.claimOutcome("reset") == RedeemOutcome(message: "Limits refilled.", settled: true, refilled: true))
+        #expect(ClaudeProvider.claimOutcome("cooldown").settled)
+        #expect(!ClaudeProvider.claimOutcome("unavailable").settled)
     }
 
     @Test func `saved state with the old single banked value still decodes`() throws {
@@ -260,14 +311,25 @@ struct BankedResetTests {
         let banked = try #require(CodexProvider.banked(credits, now: now))
         #expect(banked.count == 2)
         #expect(banked.nextExpiry == ISODate.parse("2026-11-05T00:00:00Z"))
+        #expect(banked.grantID == "a")
     }
 
-    @Test func `banked text names the next expiry`() {
+    @Test func `spend outcomes: answers settle, timeouts and unknown answers keep the request id`() {
+        #expect(CodexProvider.consumeOutcome("already_redeemed").refilled)
+        #expect(CodexProvider.consumeOutcome("no_credit").settled)
+        #expect(!CodexProvider.consumeOutcome("something_new").settled)
+        #expect(!RedeemOutcome.failure(URLError(.timedOut)).settled)
+        #expect(!RedeemOutcome.failure(ProviderError.http(502)).settled)
+        #expect(RedeemOutcome.failure(ProviderError.http(409)).settled)
+        #expect(RedeemOutcome.failure(ProviderError.rateLimited(retryAfter: nil)).settled)
+        #expect(RedeemOutcome.failure(ProviderError.unauthorized("Signed out")).message == "Signed out")
+    }
+
+    @Test func `banked detail names the next expiry`() {
         let expiry = ISODate.parse("2026-11-03T00:00:00Z")!
-        let one = BankedResets(count: 1, nextExpiry: expiry).text(now: now)
-        #expect(one.hasPrefix("1 banked reset · expires "))
-        #expect(BankedResets(count: 2, nextExpiry: nil).text(now: now) == "2 banked resets")
-        #expect(BankedResets(kind: .session, count: 2, nextExpiry: nil).text(now: now) == "2 5-hour resets")
+        #expect(BankedResets(kind: .fable, count: 1, nextExpiry: expiry).detail(now: now).hasPrefix("1 left · expires "))
+        #expect(BankedResets(kind: nil, count: 2, nextExpiry: nil).detail(now: now) == "2 left")
+        #expect(BankedResets(kind: .fable, count: 1).name == "Fable reset")
     }
 }
 

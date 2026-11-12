@@ -24,6 +24,7 @@ Menu bar AI plan usage (Claude, Codex) for macOS 26+, Liquid Glass UI. See SPEC.
 - Font: SF (system). Accent: system accent only for small "on" states; usage bars use the system accent until 80% (orange) and 95% (red); pace is neutral unless it runs out (orange)
 - Radius: panel 20, cards 8, inner 4. Spacing unit 4 (4/8/12)
 - Type sizes: `.headline`, `.body`, `.callout`, `.caption`
+- Menu bar: template image from `MenuBarIcon`; logos are simple-icons SVGs in `Sources/Assets.xcassets` (template rendering)
 - Limit row: name + pace ("10% in reserve · Lasts until reset", CodexBar wording), bar, then amount ("36% left") + "Resets in 1d 6h" (user's chosen layout)
 
 ## Constraints

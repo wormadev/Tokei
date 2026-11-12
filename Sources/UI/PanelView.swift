@@ -84,7 +84,7 @@ struct PanelView: View {
 
     private var empty: some View {
         VStack(spacing: 8) {
-            Text(refresher.installed.isEmpty ? "Install Claude Code or Codex to see usage" : "No providers enabled").font(.callout)
+            Text(refresher.installed.isEmpty ? "Install Claude Code or Codex to see usage here." : "All providers are hidden.").font(.callout)
             Button("Open Settings", action: openSettings)
         }
         .frame(maxWidth: .infinity)
@@ -105,6 +105,7 @@ struct ProviderCard: View {
     @AppStorage(Prefs.showModelLimitsKey) private var showModelLimits = true
     @AppStorage(Prefs.showHistoryKey) private var showHistory = false
     @AppStorage(Prefs.showStatusKey) private var showStatus = true
+    @AppStorage(Prefs.showBankedKey) private var showBanked = true
 
     private var failure: String? { connector.renewFailure(id, lastSuccess: state.snapshot?.fetchedAt) }
 
@@ -114,26 +115,35 @@ struct ProviderCard: View {
             if showStatus, let status {
                 StatusRow(status: status)
             }
+            if state.needsSignIn {
+                signInRow
+            }
             if let snapshot = state.snapshot {
-                if showAccount, let user = snapshot.account.user {
-                    Text(user).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                VStack(alignment: .leading, spacing: 8) {
+                    if showAccount, let user = snapshot.account.user {
+                        Text(user).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                    }
+                    ForEach(snapshot.windows.filter { $0.kind == .primary || showModelLimits }) { window in
+                        WindowRow(
+                            window: window,
+                            history: showHistory ? history.points(id, window.id) : [],
+                            stale: state.needsSignIn,
+                            now: now
+                        )
+                    }
+                    if snapshot.windows.isEmpty {
+                        Text("No limits reported").font(.caption).foregroundStyle(.secondary)
+                    }
                 }
-                ForEach(snapshot.windows.filter { $0.kind == .primary || showModelLimits }) { window in
-                    WindowRow(
-                        window: window,
-                        history: showHistory ? history.points(id, window.id) : [],
-                        now: now
-                    )
-                }
-                // Always shown: a banked reset is the one number you can act on.
-                ForEach(snapshot.resets ?? [], id: \.kind) { banked in
-                    BankedRow(id: id, banked: banked, connector: connector, now: now)
+                // Old numbers until the sign-in works again, like the menu bar.
+                .opacity(state.needsSignIn ? 0.5 : 1)
+                if showBanked, let banked = snapshot.resets, !banked.isEmpty {
+                    ForEach(banked, id: \.name) { resets in
+                        BankedRow(id: id, resets: resets, usable: !state.needsSignIn, connector: connector, now: now)
+                    }
                 }
                 if let notice = connector.notices[id] {
                     Text(notice).font(.caption).foregroundStyle(.secondary)
-                }
-                if snapshot.windows.isEmpty {
-                    Text("No limits reported").font(.caption).foregroundStyle(.secondary)
                 }
                 if showDetails, !snapshot.details.isEmpty {
                     ForEach(snapshot.details, id: \.label) { detail in
@@ -146,46 +156,54 @@ struct ProviderCard: View {
                         .foregroundStyle(.secondary)
                     }
                 }
+            } else if let error = state.error, !state.needsSignIn {
+                // Markdown so `claude` renders as code.
+                Label(LocalizedStringKey(error), systemImage: "info.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
             }
             if state.transient == true, state.snapshot != nil, let error = state.error {
                 // Nothing to fix: say it calmly and keep the last numbers.
-                Text(state.keychainUnavailable ? error : "Couldn't update\(state.retryAt.map { " · retrying \(TimeText.reset($0, now: now, absolute: false))" } ?? "")")
+                Text(state.keychainUnavailable ? error : "Couldn't update\(state.retryAt.map { ". Retrying \(TimeText.reset($0, now: now, absolute: false))" } ?? "")")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .help(error)
-            } else if let error = state.error {
-                HStack(alignment: .firstTextBaseline) {
-                    // Markdown so `claude` renders as code.
-                    Label(LocalizedStringKey(error), systemImage: state.snapshot == nil ? "info.circle" : "exclamationmark.triangle")
-                        .foregroundStyle(state.snapshot == nil ? .secondary : Color.orange)
-                        .lineLimit(2)
-                        .textSelection(.enabled)
-                    // An expired sign-in keeps the snapshot; a missing one has nothing to renew.
-                    if state.snapshot != nil, let command = Connector.statusCommands[id] {
-                        Spacer(minLength: 0)
-                        if connector.renewing.contains(id) {
-                            ProgressView().controlSize(.mini)
-                        } else if failure != nil {
-                            Button("Open Terminal") { connector.openTerminal(id) }
-                                .buttonStyle(.borderless)
-                                .foregroundStyle(.tint)
-                                .help("Runs `\(command.cli)` in Terminal, which renews the sign-in")
-                        } else {
-                            Button("Fix") { Task { await connector.renewSignIn(id, userInitiated: true) } }
-                                .buttonStyle(.borderless)
-                                .foregroundStyle(.tint)
-                                .help("Runs `\(command.cli) \(command.arguments.joined(separator: " "))`, which can renew the sign-in")
-                        }
-                    }
-                }
-                .font(.caption)
-                if let failure {
-                    Text(failure).font(.caption).foregroundStyle(.secondary)
-                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .card()
+    }
+
+    /// The one problem only the user can fix, so it sits at the top with its fix.
+    private var signInRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(LocalizedStringKey(state.error ?? ""), systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .lineLimit(2)
+                    .textSelection(.enabled)
+                Spacer(minLength: 0)
+                if state.snapshot != nil, let command = Connector.statusCommands[id] {
+                    if connector.renewing.contains(id) {
+                        ProgressView().controlSize(.mini)
+                    } else if failure != nil {
+                        Button("Open Terminal") { connector.openTerminal(id) }
+                            .foregroundStyle(.tint)
+                            .help("Starts \(command.cli) in Terminal")
+                    } else {
+                        Button("Renew") { Task { await connector.renewSignIn(id, userInitiated: true) } }
+                            .foregroundStyle(.tint)
+                            .help("Runs \(command.cli) \(command.arguments.joined(separator: " "))")
+                    }
+                }
+            }
+            .font(.callout)
+            .buttonStyle(.borderless)
+            if let failure {
+                Text(LocalizedStringKey(failure)).font(.caption).foregroundStyle(.secondary)
+            }
+        }
     }
 
     private var title: some View {
@@ -230,55 +248,63 @@ struct StatusRow: View {
     }
 }
 
-/// Banked resets, with a Reset that needs a second click: spending one can't be undone.
-/// Text-style buttons and a single line, so the row doesn't reflow when confirming.
+/// One kind of banked reset. Use asks first: a spent reset is gone.
 struct BankedRow: View {
     let id: ProviderID
-    let banked: BankedResets
+    let resets: BankedResets
+    /// False while the sign-in is expired: spending would fail.
+    let usable: Bool
     let connector: Connector
     let now: Date
-    @State private var confirming = false
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "arrow.counterclockwise.circle")
-            Text(confirming ? banked.kind.map { "Use a \($0.noun)?" } ?? "Reset limits now?" : banked.text(now: now))
-                .lineLimit(1)
-                .truncationMode(.middle)
+        HStack(spacing: 8) {
+            Image(systemName: resets.kind == .fable ? "sparkles" : "arrow.counterclockwise")
+                .foregroundStyle(.secondary)
+                .frame(width: 16)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(resets.name).font(.callout)
+                Text(resets.detail(now: now)).font(.caption).foregroundStyle(.secondary)
+            }
             Spacer(minLength: 0)
-            if let grantID = banked.grantID {
+            if usable, let grantID = resets.grantID {
                 if connector.redeeming.contains(id) {
                     ProgressView().controlSize(.mini)
-                } else if confirming {
-                    Button("Cancel") { confirming = false }
-                        .foregroundStyle(.secondary)
-                    Button("Reset") {
-                        confirming = false
-                        connector.redeem(id, grantID: grantID)
-                    }
-                    .foregroundStyle(.orange)
-                    .fontWeight(.semibold)
                 } else {
-                    Button("Reset") { confirming = true }
-                        .foregroundStyle(.tint)
-                        .help(banked.kind?.help ?? "Resets your session and weekly limits now")
+                    Button("Use") {
+                        if ResetConfirmation.confirm(resets) { connector.redeem(id, resets, grantID: grantID) }
+                    }
+                    .font(.callout)
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.tint)
                 }
             }
         }
-        .font(.callout)
-        .buttonStyle(.borderless)
-        .task(id: confirming) {
-            // Back out of the confirm state on its own if left alone.
-            guard confirming else { return }
-            try? await Task.sleep(for: .seconds(5))
-            confirming = false
-        }
+    }
+}
+
+/// A real dialog rather than an inline second click: a double-click can't spend a reset.
+@MainActor
+enum ResetConfirmation {
+    static func confirm(_ resets: BankedResets) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "Use a \(resets.name.lowercased())?"
+        let left = resets.count - 1
+        alert.informativeText = "\(resets.effect) You'll have \(left == 0 ? "none" : "\(left)") left."
+        alert.addButton(withTitle: "Use Reset")
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate()
+        // Above the panel, which floats at status bar level.
+        alert.window.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
+        return alert.runModal() == .alertFirstButtonReturn
     }
 }
 
 struct WindowRow: View {
     let window: UsageWindow
     let history: [History.Point]
+    /// Old numbers behind an expired sign-in: a projection from them would mislead.
+    var stale = false
     let now: Date
     @AppStorage(Prefs.usageDisplayKey) private var usageDisplay = UsageDisplay.used.rawValue
     @AppStorage(Prefs.absoluteResetsKey) private var absoluteResets = false
@@ -291,7 +317,7 @@ struct WindowRow: View {
 
     /// Hidden once the limit is used up: a projection adds nothing then.
     private var pace: Pace? {
-        guard showPace, window.used < 1, !hasReset else { return nil }
+        guard showPace, !stale, window.used < 1, !hasReset else { return nil }
         return Pace(window: window, now: now)
     }
 

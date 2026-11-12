@@ -1,14 +1,18 @@
 import AppKit
 import SwiftUI
 
-/// Click: glass panel. Right-click: Refresh / Settings / Quit menu.
+/// Click: glass panel. Right-click: Refresh / Settings / Quit menu. One status item, or one
+/// per provider when the menu bar is set to show each.
 @MainActor
 final class StatusBarController: NSObject {
     private let refresher: Refresher
     private let connector: Connector
     private let openSettings: () -> Void
-    private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-    private var shown: Shown?
+    /// Key: provider raw value, or "main" for the single item.
+    private var items: [String: NSStatusItem] = [:]
+    private var shown: [String: MenuBarIcon] = [:]
+    /// The item the panel hangs from.
+    private weak var anchor: NSStatusBarButton?
     private let layout = PanelLayout()
     private lazy var panel: Panel = {
         let panel = Panel(rootView: PanelView(
@@ -25,7 +29,9 @@ final class StatusBarController: NSObject {
                 Updater.shared.checkForUpdates()
             }
         ))
-        panel.statusItemFrame = { [weak self] in self?.itemFrame }
+        panel.isStatusItemClick = { [weak self] point in
+            self?.items.values.contains { Self.frame(of: $0.button)?.contains(point) == true } ?? false
+        }
         return panel
     }()
 
@@ -34,10 +40,6 @@ final class StatusBarController: NSObject {
         self.connector = connector
         self.openSettings = openSettings
         super.init()
-        item.button?.target = self
-        item.button?.action = #selector(clicked)
-        item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        item.button?.imagePosition = .imageLeading
         update()
         observe()
         NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
@@ -49,14 +51,26 @@ final class StatusBarController: NSObject {
         }
     }
 
-    private var itemFrame: NSRect? {
-        guard let button = item.button, let window = button.window else { return nil }
+    private static func frame(of button: NSStatusBarButton?) -> NSRect? {
+        guard let button, let window = button.window else { return nil }
         return window.convertToScreen(button.convert(button.bounds, to: nil))
     }
 
-    @objc private func clicked() {
+    private func makeItem(_ key: String) -> NSStatusItem {
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        // Keeps each item's spot after the user drags it with ⌘.
+        item.autosaveName = "tokei.\(key)"
+        item.button?.target = self
+        item.button?.action = #selector(clicked(_:))
+        item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        item.button?.imagePosition = .imageLeading
+        return item
+    }
+
+    @objc private func clicked(_ sender: NSStatusBarButton) {
         let event = NSApp.currentEvent
         if event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true {
+            guard let item = items.values.first(where: { $0.button === sender }) else { return }
             let menu = NSMenu()
             menu.addItem(withTitle: "Refresh", action: #selector(refreshAll), keyEquivalent: "r").target = self
             menu.addItem(withTitle: "Settings…", action: #selector(showSettings), keyEquivalent: ",").target = self
@@ -69,17 +83,23 @@ final class StatusBarController: NSObject {
             item.menu = menu
             item.button?.performClick(nil)
             item.menu = nil
-        } else if panel.isVisible {
+        } else if panel.isVisible, anchor === sender {
             panel.hide()
         } else {
-            showPanel()
+            showPanel(below: sender)
         }
     }
 
-    func showPanel() {
-        if Prefs.refreshOnOpen { refresher.refreshStale() }
-        if let screen = item.button?.window?.screen ?? NSScreen.main { layout.maxHeight = screen.visibleFrame.height - 80 }
-        panel.show(below: item.button)
+    func togglePanel() {
+        if panel.isVisible { panel.hide() } else { showPanel() }
+    }
+
+    func showPanel(below button: NSStatusBarButton? = nil) {
+        if Prefs.refreshOnOpen { refresher.refreshOnOpen() }
+        let firstItem = (refresher.enabled.map(\.rawValue) + ["main"]).lazy.compactMap { self.items[$0]?.button }.first
+        anchor = button ?? anchor ?? firstItem
+        if let screen = anchor?.window?.screen ?? NSScreen.main { layout.maxHeight = screen.visibleFrame.height - 80 }
+        panel.show(below: anchor)
     }
 
     @objc private func refreshAll() { refresher.refreshAll() }
@@ -89,6 +109,7 @@ final class StatusBarController: NSObject {
     private func observe() {
         withObservationTracking {
             _ = refresher.states
+            _ = refresher.installed
         } onChange: { [weak self] in
             Task { @MainActor in
                 self?.update()
@@ -97,161 +118,40 @@ final class StatusBarController: NSObject {
         }
     }
 
+    /// Creating an item can post a defaults change, which calls back in here.
+    private var updating = false
+
     private func update() {
-        let display = UsageDisplay.current
-        let rings = Self.ringValues(refresher.states, enabled: refresher.enabled)
-        let lines = Self.menuLines(
-            rings,
-            weekly: UserDefaults.standard.bool(forKey: Prefs.menuBarWeeklyKey),
-            session: UserDefaults.standard.bool(forKey: Prefs.menuBarSessionKey),
-            display: display
-        )
-        // Only a sign-in that worked before: a provider never signed in isn't worth a permanent dot.
-        let badge = refresher.enabled.contains { id in refresher.states[id].map { $0.needsSignIn && $0.snapshot != nil } == true }
-        // No icon and no numbers would leave nothing to click.
-        let icon = MenuBarIcon.current == .none && lines.isEmpty ? .tokei : MenuBarIcon.current
-        let shown = Shown(rings: rings, lines: lines, display: display, badge: badge, icon: icon)
-        guard shown != self.shown || item.button?.image == nil else { return }
-        self.shown = shown
-        item.button?.image = Self.statusImage(rings, lines: lines, display: display, badge: badge, icon: icon)
-    }
-
-    private struct Shown: Equatable {
-        var rings: Rings
-        var lines: [String]
-        var display: UsageDisplay
-        var badge: Bool
-        var icon: MenuBarIcon
-    }
-
-    /// Session above weekly, like the inner ring sits inside the outer one. Unknown values
-    /// are left out. Plans without a session limit (Claude Ultra) show weekly in its place.
-    nonisolated static func menuLines(_ rings: Rings, weekly: Bool, session: Bool, display: UsageDisplay) -> [String] {
-        [
-            session ? rings.session.map(display.text) : nil,
-            weekly || (session && rings.noSession) ? rings.weekly.map(display.text) : nil,
-        ].compactMap(\.self)
-    }
-
-    struct Rings: Equatable {
-        /// 0...1 or nil when unknown; drawn as track only.
-        var session: Double?
-        var weekly: Double?
-        /// The provider can't refresh until the user signs in again, so these numbers are old.
-        var stale = false
-        /// The plan has a weekly limit but no session limit (Claude Ultra).
-        var noSession = false
-    }
-
-    /// Session and weekly usage of the first provider in panel order: the one the rings show.
-    nonisolated static func ringValues(_ states: [ProviderID: ProviderState], enabled: [ProviderID], now: Date = .now) -> Rings {
-        let state = enabled.first.flatMap { states[$0] }
-        let primary = state?.snapshot?.windows.filter { $0.kind == .primary } ?? []
-        // Codex labels windows by length; when lengths are missing they fall back to slot order.
-        let session = primary.first { $0.id == "session" } ?? primary.first { $0.id != "weekly" }
-        let weekly = primary.first { $0.id == "weekly" } ?? primary.first { $0.id != session?.id }
-        let used = { (window: UsageWindow?) in window.flatMap { $0.hasReset(now: now) ? nil : $0.used } }
-        return Rings(session: used(session), weekly: used(weekly), stale: state?.needsSignIn == true, noSession: session == nil && weekly != nil)
-    }
-
-    /// Rings plus an optional number column, drawn as one template image so it follows the
-    /// menu bar's appearance. Outer ring = weekly, inner = 5h session; faint tracks keep the
-    /// mark recognizable at 0%. Stale numbers are dimmed; the badge dot means a sign-in needs the user.
-    /// No session limit: the app icon's spark sits inside the weekly ring.
-    /// A logo icon replaces the rings; no icon leaves the numbers, with the badge dot ahead of them.
-    static func statusImage(_ rings: Rings, lines: [String], display: UsageDisplay, badge: Bool = false, icon: MenuBarIcon = .tokei) -> NSImage {
-        let ink = NSColor.black.withAlphaComponent(rings.stale ? 0.4 : 1)
-        // Full menu bar height so stacked numbers aren't squeezed into the rings' 18 pt.
-        let height: CGFloat = 22
-        let font = NSFont.monospacedDigitSystemFont(ofSize: lines.count > 1 ? 11 : 13, weight: .semibold)
-        let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: ink]
-        let textWidth = lines.map { ($0 as NSString).size(withAttributes: attributes).width }.max() ?? 0
-        let iconWidth: CGFloat = icon != .none ? 18 : badge ? 6 : 0
-        let textX = iconWidth + (iconWidth > 0 ? 4 : 0)
-        let width = lines.isEmpty ? iconWidth : textX + ceil(textWidth)
-        let image = NSImage(size: NSSize(width: width, height: height), flipped: false) { _ in
-            let center = NSPoint(x: 9, y: height / 2)
-            if let mark = icon.markName.flatMap(NSImage.init(named:)) {
-                mark.draw(in: NSRect(x: 1, y: center.y - 8, width: 16, height: 16), from: .zero, operation: .sourceOver, fraction: ink.alphaComponent)
-            }
-            let sparkOnly = rings.noSession
-            if icon == .tokei && sparkOnly {
-                ink.setFill()
-                spark(at: center, radius: 4.4).fill()
-            }
-            for (radius, used) in [(7.0, rings.weekly), (3.6, rings.session)] where icon == .tokei && !(sparkOnly && radius < 7) {
-                let track = NSBezierPath()
-                track.appendArc(withCenter: center, radius: radius, startAngle: 0, endAngle: 360)
-                track.lineWidth = 2.2
-                ink.withAlphaComponent(ink.alphaComponent * 0.3).setStroke()
-                track.stroke()
-                guard let used else { continue }
-                let value = display.value(used)
-                guard value > 0 else { continue }
-                let sweep = min(value, 1) * 360
-                let arc = NSBezierPath()
-                arc.appendArc(withCenter: center, radius: radius, startAngle: 90, endAngle: 90 - sweep, clockwise: true)
-                arc.lineWidth = 2.2
-                arc.lineCapStyle = sweep >= 360 ? .butt : .round
-                ink.setStroke()
-                arc.stroke()
-            }
-            // Lay digits out by cap height so the block is optically centered.
-            let gap: CGFloat = 3
-            let block = font.capHeight * CGFloat(lines.count) + gap * CGFloat(max(lines.count - 1, 0))
-            for (index, line) in lines.enumerated() {
-                let baseline = (height + block) / 2 - font.capHeight - CGFloat(index) * (font.capHeight + gap)
-                (line as NSString).draw(at: NSPoint(x: textX, y: baseline + font.descender), withAttributes: attributes)
-            }
-            if badge && icon == .none {
-                NSColor.black.setFill()
-                NSBezierPath(ovalIn: NSRect(x: 0, y: height / 2 - 2.7, width: 5.4, height: 5.4)).fill()
-            } else if badge {
-                // Cut a gap into the rings so the dot reads as a separate mark.
-                let dot = NSPoint(x: 14.5, y: 16.5)
-                let circle = { (radius: CGFloat) in NSBezierPath(ovalIn: NSRect(x: dot.x - radius, y: dot.y - radius, width: radius * 2, height: radius * 2)) }
-                NSGraphicsContext.current?.compositingOperation = .clear
-                circle(4).fill()
-                NSGraphicsContext.current?.compositingOperation = .sourceOver
-                NSColor.black.setFill()
-                circle(2.7).fill()
-            }
-            return true
+        guard !updating else { return }
+        updating = true
+        defer { updating = false }
+        let config = MenuBarConfig.current
+        let enabled = refresher.enabled
+        let wanted: [(key: String, provider: ProviderID?)] = config.each && !enabled.isEmpty
+            ? enabled.map { ($0.rawValue, $0) }
+            : [("main", nil)]
+        for key in items.keys where !wanted.contains(where: { $0.key == key }) {
+            if let item = items.removeValue(forKey: key) { NSStatusBar.system.removeStatusItem(item) }
+            shown[key] = nil
         }
-        image.isTemplate = true
-        let describe = { (used: Double?) in used.map(display.text) ?? "unknown" }
-        let mode = display == .used ? "used" : "left"
-        let session = rings.noSession ? "" : "session \(describe(rings.session)) \(mode), "
-        image.accessibilityDescription = "Tokei: \(session)weekly \(describe(rings.weekly)) \(mode)"
-            + (badge ? ". Sign-in needed" : "")
-        return image
-    }
-
-    /// Four-point star from Sources/AppIcon.icon/Assets/spark.svg: curves pulled 30% toward the center.
-    private static func spark(at center: NSPoint, radius r: CGFloat) -> NSBezierPath {
-        let point = { (x: CGFloat, y: CGFloat) in NSPoint(x: center.x + x * r, y: center.y + y * r) }
-        let tips: [(CGFloat, CGFloat)] = [(0, 1), (1, 0), (0, -1), (-1, 0)]
-        let path = NSBezierPath()
-        path.move(to: point(0, 1))
-        for (index, tip) in tips.enumerated() {
-            let next = tips[(index + 1) % tips.count]
-            // The SVG's quadratic control point, raised to cubic: 2/3 of the way from each end.
-            let control = ((tip.0 + next.0) * 0.3, (tip.1 + next.1) * 0.3)
-            path.curve(
-                to: point(next.0, next.1),
-                controlPoint1: point(tip.0 + (control.0 - tip.0) * 2 / 3, tip.1 + (control.1 - tip.1) * 2 / 3),
-                controlPoint2: point(next.0 + (control.0 - next.0) * 2 / 3, next.1 + (control.1 - next.1) * 2 / 3)
-            )
+        // Reversed: each new item lands left of the last, so panel order reads left to right.
+        for (key, provider) in wanted.reversed() {
+            let item = items[key] ?? makeItem(key)
+            items[key] = item
+            var itemConfig = config
+            if let provider { itemConfig.provider = provider }
+            let icon = MenuBarIcon.make(states: refresher.states, enabled: enabled, config: itemConfig, display: .current)
+            guard icon != shown[key] || item.button?.image == nil else { continue }
+            shown[key] = icon
+            item.button?.image = icon.image()
         }
-        path.close()
-        return path
     }
 }
 
 /// Borderless panel under the status item; the SwiftUI root is the single Liquid Glass surface.
 @MainActor
 final class Panel: NSPanel {
-    var statusItemFrame: (() -> NSRect?)?
+    var isStatusItemClick: ((NSPoint) -> Bool)?
     private var topEdge: CGFloat?
     private var anchorMidX: CGFloat?
     /// The status item's screen, not the panel's last one: they differ across displays.
@@ -299,7 +199,7 @@ final class Panel: NSPanel {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 // Status item clicks reach the global monitor too; the toggle handles those.
-                if let item = self.statusItemFrame?(), item.contains(NSEvent.mouseLocation) { return }
+                if self.isStatusItemClick?(NSEvent.mouseLocation) == true { return }
                 self.hide()
             }
         }

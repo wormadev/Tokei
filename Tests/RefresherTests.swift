@@ -193,13 +193,13 @@ struct RefresherTests {
         let refresher = Refresher(providers: [provider], store: tempStore())
         let then = Date.now.addingTimeInterval(-200)
         refresher.apply(.failure(ProviderError.rateLimited(retryAfter: 3600)), to: .claude, now: then)
-        refresher.refreshStale()
+        refresher.refreshOnOpen()
         try await Task.sleep(for: .milliseconds(300))
         #expect(provider.fetches.withLock { $0 } == 0)
 
         refresher.apply(.failure(URLError(.notConnectedToInternet)), to: .claude, now: then)
         #expect(try #require(refresher.states[.claude]?.retryAt) > .now)
-        refresher.refreshStale()
+        refresher.refreshOnOpen()
         for _ in 0 ..< 30 where provider.fetches.withLock({ $0 }) == 0 {
             try await Task.sleep(for: .milliseconds(100))
         }
@@ -236,6 +236,32 @@ struct RefresherTests {
         relaunched.onReset = { _, _ in alerts += 1 }
         relaunched.apply(.success(snap(0, 5 * 3600 - 60, 0, "a")), to: .claude, now: now)
         #expect(alerts == 1)
+    }
+
+    @Test func `opening the panel refreshes unless just fetched or rate limited`() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        #expect(Refresher.isStaleOnOpen(nil, now: now))
+        var state = ProviderState(lastAttempt: now.addingTimeInterval(-5))
+        #expect(!Refresher.isStaleOnOpen(state, now: now))
+        state.lastAttempt = now.addingTimeInterval(-30)
+        #expect(Refresher.isStaleOnOpen(state, now: now))
+        // Failure backoff doesn't hold back a refresh the user asked for by opening the panel.
+        state.retryAt = now.addingTimeInterval(600)
+        #expect(Refresher.isStaleOnOpen(state, now: now))
+        state.rateLimited = true
+        #expect(!Refresher.isStaleOnOpen(state, now: now))
+    }
+
+    @Test func `a 429 is remembered as rate limited until a success`() {
+        let refresher = makeRefresher()
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        refresher.apply(.failure(ProviderError.rateLimited(retryAfter: 60)), to: .claude, now: now)
+        #expect(refresher.states[.claude]?.rateLimited == true)
+        refresher.apply(.failure(ProviderError.http(500)), to: .claude, now: now)
+        #expect(refresher.states[.claude]?.rateLimited == nil)
+        refresher.apply(.failure(ProviderError.rateLimited(retryAfter: 60)), to: .claude, now: now)
+        refresher.apply(.success(snapshot(used: 0.1, at: now)), to: .claude, now: now)
+        #expect(refresher.states[.claude]?.rateLimited == nil)
     }
 
     @Test func `due after interval, and after retryAt when failing`() {
@@ -331,45 +357,87 @@ struct FormattingTests {
     }
 }
 
-struct MenuRingsTests {
+struct MenuBarIconTests {
     private func state(_ windows: [UsageWindow]) -> ProviderState {
         ProviderState(snapshot: Snapshot(windows: windows, account: Account(), fetchedAt: .now))
     }
 
-    @Test func `rings follow the first provider in order`() {
-        let states: [ProviderID: ProviderState] = [
-            .claude: state([
-                UsageWindow(id: "session", label: "", kind: .primary, used: 0.13),
-                UsageWindow(id: "weekly", label: "", kind: .primary, used: 0.43),
-                UsageWindow(id: "weekly-example", label: "", kind: .secondary, used: 0.9),
-            ]),
-            .codex: state([UsageWindow(id: "weekly", label: "", kind: .primary, used: 0.7)]),
-        ]
-        #expect(StatusBarController.ringValues(states, enabled: [.claude, .codex]) == .init(session: 0.13, weekly: 0.43))
-        #expect(StatusBarController.ringValues(states, enabled: [.codex, .claude]) == .init(session: nil, weekly: 0.7, noSession: true))
-        #expect(StatusBarController.ringValues(states, enabled: []) == .init(session: nil, weekly: nil))
+    private func config(_ limits: [String], provider: ProviderID? = nil, numbers: MenuBarConfig.Numbers = .all) -> MenuBarConfig {
+        MenuBarConfig(provider: provider, limits: limits, style: .rings, numbers: numbers, logo: false)
     }
 
-    @Test func `rings drop limits past their reset and dim when the sign-in expired`() {
+    private func used(_ icon: MenuBarIcon) -> [Double?] { icon.meters.map(\.used) }
+
+    private let states: [ProviderID: ProviderState] = [
+        .claude: ProviderState(snapshot: Snapshot(windows: [
+            UsageWindow(id: "session", label: "Session", kind: .primary, used: 0.13),
+            UsageWindow(id: "weekly", label: "Weekly", kind: .primary, used: 0.43),
+            UsageWindow(id: "weekly-fable", label: "Fable weekly", kind: .secondary, used: 0.9),
+        ], account: Account(), fetchedAt: .now)),
+        .codex: ProviderState(snapshot: Snapshot(windows: [UsageWindow(id: "weekly", label: "Weekly", kind: .primary, used: 0.7)], account: Account(), fetchedAt: .now)),
+    ]
+
+    @Test func `meters follow the chosen limits of the first provider in order`() {
+        let icon = MenuBarIcon.make(states: states, enabled: [.claude, .codex], config: config(["weekly", "weekly-fable"]), display: .used)
+        #expect(icon.provider == .claude)
+        #expect(used(icon) == [0.43, 0.9])
+        #expect(icon.lines == ["43%", "90%"])
+        let codexFirst = MenuBarIcon.make(states: states, enabled: [.codex, .claude], config: config(["session", "weekly"]), display: .used)
+        // Codex has no session here: left out, not drawn empty.
+        #expect(used(codexFirst) == [0.7])
+        #expect(codexFirst.lines == ["70%"])
+        #expect(used(MenuBarIcon.make(states: states, enabled: [], config: config(["session"]), display: .used)) == [nil])
+    }
+
+    @Test func `a chosen provider wins unless it is hidden`() {
+        let picked = MenuBarIcon.make(states: states, enabled: [.claude, .codex], config: config(["weekly"], provider: .codex), display: .used)
+        #expect(picked.provider == .codex)
+        let hidden = MenuBarIcon.make(states: states, enabled: [.claude], config: config(["weekly"], provider: .codex), display: .used)
+        #expect(hidden.provider == .claude)
+        // A limit Codex never has isn't drawn as an empty ring forever: its main limit stands in.
+        #expect(used(MenuBarIcon.make(states: states, enabled: [.codex], config: config(["weekly-fable"]), display: .used)) == [0.7])
+    }
+
+    @Test func `numbers show none, the first, or every limit`() {
+        let make = { (numbers: MenuBarConfig.Numbers, display: UsageDisplay) in
+            MenuBarIcon.make(states: states, enabled: [.claude], config: config(["session", "weekly"], numbers: numbers), display: display).lines
+        }
+        #expect(make(.all, .used) == ["13%", "43%"])
+        #expect(make(.first, .remaining) == ["87%"])
+        #expect(make(.hidden, .used).isEmpty)
+    }
+
+    @Test func `limits past their reset are unknown, and an expired sign-in dims and badges`() {
         let now = Date(timeIntervalSince1970: 1_000_000)
         var claude = state([
-            UsageWindow(id: "session", label: "", kind: .primary, used: 0.8, resetsAt: now.addingTimeInterval(-60)),
-            UsageWindow(id: "weekly", label: "", kind: .primary, used: 0.4, resetsAt: now.addingTimeInterval(3600)),
+            UsageWindow(id: "session", label: "Session", kind: .primary, used: 0.8, resetsAt: now.addingTimeInterval(-60)),
+            UsageWindow(id: "weekly", label: "Weekly", kind: .primary, used: 0.4, resetsAt: now.addingTimeInterval(3600)),
         ])
-        #expect(StatusBarController.ringValues([.claude: claude], enabled: [.claude], now: now) == .init(session: nil, weekly: 0.4))
+        let make = { MenuBarIcon.make(states: [.claude: claude, .codex: self.state([])], enabled: [.codex, .claude], config: self.config(["session", "weekly"], provider: .claude), display: .used, now: now) }
+        #expect(used(make()) == [nil, 0.4])
 
         claude.error = "Sign-in expired"
-        #expect(StatusBarController.ringValues([.claude: claude], enabled: [.claude], now: now).stale)
+        #expect(make().stale)
+        #expect(make().badge)
         claude.transient = true
-        #expect(!StatusBarController.ringValues([.claude: claude], enabled: [.claude], now: now).stale)
+        #expect(!make().stale)
+    }
+
+    @Test func `highest usage follows the fullest limit`() {
+        let highest = MenuBarConfig(highest: true, limits: ["weekly"], style: .rings, numbers: .first, logo: false)
+        let icon = MenuBarIcon.make(states: states, enabled: [.claude, .codex], config: highest, display: .used)
+        #expect(icon.provider == .claude)
+        #expect(icon.logo)
+        let codexOnly = MenuBarIcon.make(states: states, enabled: [.codex], config: highest, display: .used)
+        #expect(codexOnly.provider == .codex)
     }
 
     @Test func `codex windows without lengths fall back to slot order`() {
-        let states: [ProviderID: ProviderState] = [.codex: state([
+        let codex: [ProviderID: ProviderState] = [.codex: state([
             UsageWindow(id: "primary", label: "", kind: .primary, used: 0.2),
             UsageWindow(id: "secondary", label: "", kind: .primary, used: 0.5),
         ])]
-        #expect(StatusBarController.ringValues(states, enabled: [.codex]) == .init(session: 0.2, weekly: 0.5))
+        #expect(used(MenuBarIcon.make(states: codex, enabled: [.codex], config: config(["session", "weekly"]), display: .used)) == [0.2, 0.5])
     }
 }
 
@@ -380,20 +448,48 @@ struct PrefsTests {
         #expect(UsageDisplay.remaining.value(1.2) == 0)
     }
 
-    @Test func `menu bar lines stack session over weekly without labels`() {
-        let rings = StatusBarController.Rings(session: 0.13, weekly: 0.43)
-        #expect(StatusBarController.menuLines(rings, weekly: true, session: true, display: .used) == ["13%", "43%"])
-        #expect(StatusBarController.menuLines(rings, weekly: false, session: true, display: .remaining) == ["87%"])
-        #expect(StatusBarController.menuLines(rings, weekly: false, session: false, display: .used).isEmpty)
-        #expect(StatusBarController.menuLines(.init(session: nil, weekly: 0.5), weekly: true, session: true, display: .used) == ["50%"])
+    @MainActor @Test func `a shortcut survives storage and junk stores nothing`() {
+        let shortcut = HotKey.Shortcut(keyCode: 17, modifiers: 6144, display: "⌃⌥T")
+        #expect(HotKey.Shortcut(stored: shortcut.stored) == shortcut)
+        #expect(HotKey.Shortcut(stored: "") == nil)
+        #expect(HotKey.Shortcut(stored: "x,1,A") == nil)
     }
 
-    @Test func `plans without a session limit show weekly in the session slot`() {
-        let weeklyOnly = StatusBarController.Rings(session: nil, weekly: 0.46, noSession: true)
-        #expect(StatusBarController.menuLines(weeklyOnly, weekly: false, session: true, display: .used) == ["46%"])
-        #expect(StatusBarController.menuLines(weeklyOnly, weekly: false, session: false, display: .used).isEmpty)
-        let sessionReset = StatusBarController.Rings(session: nil, weekly: 0.46)
-        #expect(StatusBarController.menuLines(sessionReset, weekly: false, session: true, display: .used).isEmpty)
+    @Test func `countdowns round up and drop zero parts`() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        #expect(TimeText.reset(now.addingTimeInterval(30), now: now, absolute: false) == "in 1m")
+        #expect(TimeText.reset(now.addingTimeInterval(2 * 86400), now: now, absolute: false) == "in 2d")
+        #expect(TimeText.reset(now.addingTimeInterval(3 * 3600), now: now, absolute: false) == "in 3h")
+        #expect(TimeText.reset(now.addingTimeInterval(3 * 3600 + 61), now: now, absolute: false) == "in 3h 2m")
+    }
+
+    @Test func `low power and heat stretch background refresh`() {
+        #expect(Refresher.saving(300, lowPower: false, thermal: .nominal) == 300)
+        #expect(Refresher.saving(300, lowPower: true, thermal: .nominal) == 1800)
+        #expect(Refresher.saving(300, lowPower: false, thermal: .serious) == 1800)
+        #expect(Refresher.saving(3600, lowPower: true, thermal: .nominal) == 3600)
+    }
+
+    @Test func `plans without a session limit show weekly with the spark inside`() {
+        let weeklyOnly: [ProviderID: ProviderState] = [
+            .claude: ProviderState(snapshot: Snapshot(windows: [UsageWindow(id: "weekly", label: "Weekly", kind: .primary, used: 0.46)], account: Account(), fetchedAt: .now)),
+        ]
+        let config = { (numbers: MenuBarConfig.Numbers) in
+            MenuBarConfig(limits: ["session", "weekly"], style: .rings, numbers: numbers, logo: false)
+        }
+        let icon = MenuBarIcon.make(states: weeklyOnly, enabled: [.claude], config: config(.first), display: .used)
+        #expect(icon.lines == ["46%"])
+        #expect(icon.spark)
+        #expect(MenuBarIcon.make(states: weeklyOnly, enabled: [.claude], config: config(.hidden), display: .used).lines.isEmpty)
+        let sessionReset: [ProviderID: ProviderState] = [
+            .claude: ProviderState(snapshot: Snapshot(windows: [
+                UsageWindow(id: "session", label: "Session", kind: .primary, used: 0.5, resetsAt: .now.addingTimeInterval(-60)),
+                UsageWindow(id: "weekly", label: "Weekly", kind: .primary, used: 0.46),
+            ], account: Account(), fetchedAt: .now)),
+        ]
+        let reset = MenuBarIcon.make(states: sessionReset, enabled: [.claude], config: config(.first), display: .used)
+        #expect(reset.lines.isEmpty)
+        #expect(!reset.spark)
     }
 
     @Test func `provider order keeps saved order and appends missing providers`() {
@@ -418,10 +514,70 @@ struct ResetDetectionTests {
         #expect(Refresher.resets(old: snap(0.6, resets: 0), new: snap(0.0, resets: 5 * 3600)).map(\.id) == ["session"])
     }
 
+    @Test func `crossing 80 and 95 percent notifies once per threshold, again after a reset`() {
+        let crossed = { (old: Snapshot, new: Snapshot) in Refresher.lowCrossings(old: old, new: new, now: now).map(\.1) }
+        #expect(crossed(snap(0.5, resets: 3600), snap(0.82, resets: 3600)) == [0.8])
+        #expect(crossed(snap(0.82, resets: 3600), snap(0.9, resets: 3600)).isEmpty)
+        #expect(crossed(snap(0.5, resets: 3600), snap(0.97, resets: 3600)) == [0.95])
+        #expect(crossed(snap(0.97, resets: 0), snap(0.85, resets: 5 * 3600)) == [0.8])
+        #expect(crossed(snap(0.5, resets: 3600, kind: .secondary), snap(0.81, resets: 3600, kind: .secondary)) == [0.8])
+    }
+
     @Test func `jitter, unused limits and per-model limits are not resets`() {
         #expect(Refresher.resets(old: snap(0.6, resets: 0), new: snap(0.5, resets: 120)).isEmpty)
         #expect(Refresher.resets(old: snap(0.0, resets: 0), new: snap(0.0, resets: 5 * 3600)).isEmpty)
         #expect(Refresher.resets(old: snap(0.6, resets: 0, kind: .secondary), new: snap(0, resets: 5 * 3600, kind: .secondary)).isEmpty)
         #expect(Refresher.resets(old: snap(0.6, resets: nil), new: snap(0, resets: 5 * 3600)).isEmpty)
+    }
+}
+
+struct ReminderTests {
+    private let now = Date(timeIntervalSince1970: 1_000_000)
+
+    private func weekly(used: Double, resetsIn: TimeInterval) -> UsageWindow {
+        UsageWindow(id: "weekly", label: "Weekly", kind: .primary, used: used, resetsAt: now.addingTimeInterval(resetsIn), duration: 7 * 86400)
+    }
+
+    @Test func `unused weekly quota warns a day and an hour before reset, keyed per stage`() {
+        #expect(Reminder.unused(.codex, weekly(used: 0.4, resetsIn: 30 * 3600), now: now).isEmpty)
+        let day = Reminder.unused(.codex, weekly(used: 0.4, resetsIn: 20 * 3600), now: now)
+        #expect(day.map(\.kind) == [.unusedBeforeReset(lead: 86400)])
+        #expect(day.first?.body.hasPrefix("60% is still unused") == true)
+        let hour = Reminder.unused(.codex, weekly(used: 0.4, resetsIn: 1800), now: now)
+        #expect(hour.map(\.kind) == [.unusedBeforeReset(lead: 3600)])
+        #expect(day.first?.key != hour.first?.key)
+        #expect(Reminder.unused(.codex, weekly(used: 0.9, resetsIn: 1800), now: now).isEmpty)
+        let session = UsageWindow(id: "session", label: "Session", kind: .primary, used: 0.1, resetsAt: now.addingTimeInterval(1800), duration: 18000)
+        #expect(Reminder.unused(.codex, session, now: now).isEmpty)
+        var sonnet = weekly(used: 0, resetsIn: 1800)
+        sonnet.kind = .secondary
+        #expect(Reminder.unused(.claude, sonnet, now: now).isEmpty)
+    }
+
+    @Test func `pace warns once half is used and it runs out before the reset`() {
+        // Half the week gone, 80% used: runs out well before the reset.
+        let fast = weekly(used: 0.8, resetsIn: 3.5 * 86400)
+        #expect(Reminder.runsOut(.claude, fast, now: now).count == 1)
+        // The reset time wobbles by a second between fetches; still the same reminder.
+        var wobble = fast
+        wobble.resetsAt = fast.resetsAt?.addingTimeInterval(0.4)
+        #expect(Reminder.runsOut(.claude, wobble, now: now).first?.key == Reminder.runsOut(.claude, fast, now: now).first?.key)
+        #expect(Reminder.runsOut(.claude, weekly(used: 0.3, resetsIn: 3.5 * 86400), now: now).isEmpty)
+        #expect(Reminder.runsOut(.claude, weekly(used: 0.5, resetsIn: 3.5 * 86400), now: now).isEmpty)
+    }
+
+    @Test func `a banked reset expiring within a day reminds, and nothing comes from an expired sign-in`() {
+        let soon = BankedResets(kind: .fable, count: 1, nextExpiry: now.addingTimeInterval(3600), grantID: "f")
+        #expect(Reminder.banked(.claude, soon, now: now)?.title == "Claude fable reset expires in 1h")
+        #expect(Reminder.banked(.claude, BankedResets(kind: .full, count: 1, nextExpiry: now.addingTimeInterval(3 * 86400)), now: now) == nil)
+
+        var snapshot = Snapshot(windows: [], account: Account(), fetchedAt: now)
+        snapshot.resets = [soon]
+        var state = ProviderState(snapshot: snapshot)
+        #expect(Reminder.due(states: [.claude: state], enabled: [.claude], now: now).count == 1)
+        state.error = "Sign-in expired"
+        #expect(Reminder.due(states: [.claude: state], enabled: [.claude], now: now).isEmpty)
+        state.transient = true
+        #expect(Reminder.due(states: [.claude: state], enabled: [.claude], now: now).isEmpty)
     }
 }

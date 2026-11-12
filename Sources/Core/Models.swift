@@ -62,45 +62,47 @@ struct Snapshot: Codable, Equatable, Sendable {
     var signInExpiresAt: Date?
 }
 
-/// Free limit resets the plan has banked (Claude "cedar_ember" grants, Codex reset credits).
+/// Free limit resets the plan has banked (Claude "cedar_ember" grants, Codex reset credits),
+/// grouped by what they refill.
 struct BankedResets: Codable, Equatable, Sendable {
-    /// What a Claude reset gives back. Nil for providers that don't say (Codex).
+    /// Claude Code's grouping. Nil when the provider doesn't say (Codex).
     enum Kind: String, Codable, CaseIterable, Sendable {
         case session, weekly, fable, full
-
-        var noun: String {
-            switch self {
-            case .session: "5-hour reset"
-            case .weekly: "weekly reset"
-            case .fable: "Fable reset"
-            case .full: "full reset"
-            }
-        }
-
-        var help: String {
-            switch self {
-            case .session: "Resets your 5-hour limit now"
-            case .weekly: "Resets your weekly limits now"
-            case .fable: "Returns what Fable used to your weekly limit"
-            case .full: "Resets your session and weekly limits now"
-            }
-        }
     }
 
     var kind: Kind?
     var count: Int
     var nextExpiry: Date?
-    /// The grant Claude would spend next, when it can be used right now. Nil: no Reset button.
+    /// The grant to spend for this kind, when it can be used right now. Nil: no Use button.
     var grantID: String?
 
-    func text(now: Date) -> String {
-        let name = kind?.noun ?? "banked reset"
-        let noun = count == 1 ? "1 \(name)" : "\(count) \(name)s"
-        guard let nextExpiry else { return noun }
+    var name: String {
+        switch kind {
+        case .full?: "Full reset"
+        case .session?: "Session reset"
+        case .weekly?: "Weekly reset"
+        case .fable?: "Fable reset"
+        case nil: "Banked reset"
+        }
+    }
+
+    /// What spending one does, for the confirmation.
+    var effect: String {
+        switch kind {
+        case .full?, nil: "Refills your session and weekly limits."
+        case .session?: "Refills your session limit."
+        case .weekly?: "Refills your weekly limit."
+        case .fable?: "Refills your Fable limit and gives back what Fable used of your weekly limit. The rest of your week stays as it is."
+        }
+    }
+
+    /// "3 left · next expires Dec 2".
+    func detail(now: Date) -> String {
+        guard let nextExpiry else { return "\(count) left" }
         let when = Calendar.current.isDate(nextExpiry, inSameDayAs: now)
             ? nextExpiry.formatted(date: .omitted, time: .shortened)
             : nextExpiry.formatted(.dateTime.month(.abbreviated).day())
-        return "\(noun) · \(count == 1 ? "expires" : "next expires") \(when)"
+        return "\(count) left · \(count == 1 ? "expires" : "next expires") \(when)"
     }
 }
 
@@ -120,6 +122,25 @@ extension [UsageWindow] {
             assigned.insert(copy.id)
             return copy
         }
+    }
+}
+
+/// What a reset spend came back with. Unsettled: the server may not have seen it, so a retry
+/// must send the same request id, or one click could spend two resets.
+struct RedeemOutcome: Equatable, Sendable {
+    var message: String
+    var settled: Bool
+    var refilled = false
+
+    /// A 4xx is an answer; timeouts, server errors and unreadable replies are not.
+    static func failure(_ error: Error) -> RedeemOutcome {
+        let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        let settled = switch error as? ProviderError {
+        case .unauthorized?, .signInExpired?, .notConfigured?, .rateLimited?, .keychainLocked?, .keychainBlocked?: true
+        case let .http(code)?: code < 500
+        case .badResponse?, nil: false
+        }
+        return RedeemOutcome(message: settled ? message : "The reset wasn't confirmed. Try again; it won't be spent twice.", settled: settled)
     }
 }
 
