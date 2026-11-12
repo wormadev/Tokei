@@ -9,13 +9,20 @@ final class StatusBarController: NSObject {
     private let openSettings: () -> Void
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private var shown: Shown?
+    private let layout = PanelLayout()
     private lazy var panel: Panel = {
         let panel = Panel(rootView: PanelView(
             refresher: refresher,
             connector: connector,
+            layout: layout,
             openSettings: { [weak self] in
                 self?.panel.hide()
                 self?.openSettings()
+            },
+            // The panel floats above Sparkle's window.
+            checkForUpdates: { [weak self] in
+                self?.panel.hide()
+                Updater.shared.checkForUpdates()
             }
         ))
         panel.statusItemFrame = { [weak self] in self?.itemFrame }
@@ -71,6 +78,7 @@ final class StatusBarController: NSObject {
 
     func showPanel() {
         if Prefs.refreshOnOpen { refresher.refreshStale() }
+        if let screen = item.button?.window?.screen ?? NSScreen.main { layout.maxHeight = screen.visibleFrame.height - 80 }
         panel.show(below: item.button)
     }
 
@@ -98,7 +106,8 @@ final class StatusBarController: NSObject {
             session: UserDefaults.standard.bool(forKey: Prefs.menuBarSessionKey),
             display: display
         )
-        let badge = refresher.enabled.contains { refresher.states[$0]?.needsSignIn == true }
+        // Only a sign-in that worked before: a provider never signed in isn't worth a permanent dot.
+        let badge = refresher.enabled.contains { id in refresher.states[id].map { $0.needsSignIn && $0.snapshot != nil } == true }
         // No icon and no numbers would leave nothing to click.
         let icon = MenuBarIcon.current == .none && lines.isEmpty ? .tokei : MenuBarIcon.current
         let shown = Shown(rings: rings, lines: lines, display: display, badge: badge, icon: icon)
@@ -303,6 +312,7 @@ final class Panel: NSPanel {
     }
 
     override func cancelOperation(_ sender: Any?) { hide() }
+    override func performClose(_ sender: Any?) { hide() }
 
     private func fit(_ size: CGSize) {
         guard size.width > 0, size.height > 0, size != frame.size else { return }
@@ -315,7 +325,8 @@ final class Panel: NSPanel {
         let visible = (anchorScreen ?? screen ?? NSScreen.main)?.visibleFrame ?? .zero
         var x = (anchorMidX ?? frame.midX) - size.width / 2
         x = min(max(x, visible.minX + 8), visible.maxX - size.width - 8)
-        setFrame(NSRect(x: x, y: top - size.height, width: size.width, height: size.height), display: true)
+        let y = max(top - size.height, visible.minY + 8)
+        setFrame(NSRect(x: x, y: y, width: size.width, height: size.height), display: true)
         invalidateShadow()
     }
 }

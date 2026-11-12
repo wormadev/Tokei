@@ -54,8 +54,9 @@ struct Snapshot: Codable, Equatable, Sendable {
     var windows: [UsageWindow]
     var account: Account
     var details: [Detail] = []
-    /// Optional so older saved state still decodes.
-    var banked: BankedResets?
+    /// One entry per reset kind. Optional so older saved state still decodes; replaces the
+    /// old single `banked` value, whose key is now ignored.
+    var resets: [BankedResets]?
     var fetchedAt: Date
     /// When the CLI's access token runs out, so the refresher can check right then.
     var signInExpiresAt: Date?
@@ -63,13 +64,38 @@ struct Snapshot: Codable, Equatable, Sendable {
 
 /// Free limit resets the plan has banked (Claude "cedar_ember" grants, Codex reset credits).
 struct BankedResets: Codable, Equatable, Sendable {
+    /// What a Claude reset gives back. Nil for providers that don't say (Codex).
+    enum Kind: String, Codable, CaseIterable, Sendable {
+        case session, weekly, fable, full
+
+        var noun: String {
+            switch self {
+            case .session: "5-hour reset"
+            case .weekly: "weekly reset"
+            case .fable: "Fable reset"
+            case .full: "full reset"
+            }
+        }
+
+        var help: String {
+            switch self {
+            case .session: "Resets your 5-hour limit now"
+            case .weekly: "Resets your weekly limits now"
+            case .fable: "Returns what Fable used to your weekly limit"
+            case .full: "Resets your session and weekly limits now"
+            }
+        }
+    }
+
+    var kind: Kind?
     var count: Int
     var nextExpiry: Date?
     /// The grant Claude would spend next, when it can be used right now. Nil: no Reset button.
     var grantID: String?
 
     func text(now: Date) -> String {
-        let noun = count == 1 ? "1 banked reset" : "\(count) banked resets"
+        let name = kind?.noun ?? "banked reset"
+        let noun = count == 1 ? "1 \(name)" : "\(count) \(name)s"
         guard let nextExpiry else { return noun }
         let when = Calendar.current.isDate(nextExpiry, inSameDayAs: now)
             ? nextExpiry.formatted(date: .omitted, time: .shortened)
@@ -78,16 +104,42 @@ struct BankedResets: Codable, Equatable, Sendable {
     }
 }
 
+extension [UsageWindow] {
+    /// History is keyed by window id, so the first of each id keeps it and repeats get a
+    /// "-2", "-3" suffix that no other window uses.
+    func withUniqueIDs() -> [UsageWindow] {
+        let original = Set(map(\.id))
+        var assigned = Set<String>()
+        return map { window in
+            var copy = window
+            var n = 1
+            while assigned.contains(copy.id) || (n > 1 && original.contains(copy.id)) {
+                n += 1
+                copy.id = "\(window.id)-\(n)"
+            }
+            assigned.insert(copy.id)
+            return copy
+        }
+    }
+}
+
 enum ProviderError: Error, Equatable, LocalizedError {
     case notConfigured(String)
+    /// The server rejected the sign-in.
     case unauthorized(String)
+    /// The saved token's expiry passed. The CLI renews it next time it runs, so no alert.
+    case signInExpired(String)
+    case keychainLocked
+    case keychainBlocked
     case rateLimited(retryAfter: TimeInterval?)
     case http(Int)
     case badResponse(String)
 
     var errorDescription: String? {
         switch self {
-        case let .notConfigured(hint), let .unauthorized(hint): hint
+        case let .notConfigured(hint), let .unauthorized(hint), let .signInExpired(hint): hint
+        case .keychainLocked: "Keychain is locked. Refresh to try again."
+        case .keychainBlocked: "Couldn't read the Keychain. Refresh to try again."
         case .rateLimited: "Rate limited, retrying later"
         case let .http(code): "Server returned HTTP \(code)"
         case let .badResponse(detail): "Unexpected response: \(detail)"
@@ -101,7 +153,8 @@ protocol UsageProvider: Sendable {
     func isInstalled() -> Bool
     /// Where the CLI writes session logs; writes there mean an agent is working.
     var activityFolder: URL { get }
-    func fetch() async throws -> Snapshot
+    /// userInitiated: the user asked (Refresh, Fix, a reset), so a Keychain read may prompt.
+    func fetch(userInitiated: Bool) async throws -> Snapshot
 }
 
 enum Money {

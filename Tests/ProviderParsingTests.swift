@@ -49,6 +49,25 @@ struct ClaudeParsingTests {
         #expect(snapshot.details == [Detail(label: "Claude Code this week", value: "100%")])
     }
 
+    @Test func `repeated limits get distinct ids, unique ones keep theirs`() throws {
+        let usage = try decode(ClaudeProvider.Usage.self, """
+        {"limits":[{"kind":"session","percent":1},
+                   {"kind":"weekly_scoped","percent":2},
+                   {"kind":"weekly_scoped","percent":3,"scope":{"model":{"display_name":"Model"}}},
+                   {"kind":"weekly_scoped","percent":4,"scope":{"model":{"display_name":"Opus"}}}]}
+        """)
+        let oauth = ClaudeProvider.Credentials.OAuth(accessToken: "x", expiresAt: nil, subscriptionType: nil, rateLimitTier: nil)
+        let ids = ClaudeProvider.snapshot(usage: usage, profile: nil, oauth: oauth).windows.map(\.id)
+        #expect(ids == ["session", "weekly-model", "weekly-model-2", "weekly-opus"])
+    }
+
+    @Test func `a missing expiry is not treated as expired`() throws {
+        let credentials = try decode(ClaudeProvider.Credentials.self, #"{"claudeAiOauth":{"accessToken":"x"}}"#)
+        #expect(!credentials.isExpired)
+        let expired = try decode(ClaudeProvider.Credentials.self, #"{"claudeAiOauth":{"accessToken":"x","expiresAt":1000}}"#)
+        #expect(expired.isExpired)
+    }
+
     @Test func `version folder names are recognized`() {
         #expect(ClaudeProvider.isVersion("2.1.306"))
         #expect(!ClaudeProvider.isVersion("claude"))
@@ -92,6 +111,16 @@ struct CodexParsingTests {
 
         let both = try decode(CodexProvider.Usage.self, #"{"rate_limit":{"primary_window":{"used_percent":5},"secondary_window":{"used_percent":9}}}"#)
         #expect(Set(CodexProvider.snapshot(usage: both, idToken: nil).windows.map(\.id)).count == 2)
+    }
+
+    @Test func `a 30 day window is monthly and keeps a distinct id`() throws {
+        let usage = try decode(CodexProvider.Usage.self, """
+        {"rate_limit":{"primary_window":{"used_percent":5,"limit_window_seconds":2592000},
+                       "secondary_window":{"used_percent":9,"limit_window_seconds":604800}}}
+        """)
+        let windows = CodexProvider.snapshot(usage: usage, idToken: nil).windows
+        #expect(windows.map(\.id) == ["weekly", "weekly-2"])
+        #expect(windows.map(\.label) == ["Weekly", "Monthly"])
     }
 
     @Test func `reads email from id token claims`() {
@@ -152,21 +181,73 @@ struct BankedResetTests {
           {"id":"g4","resets_left":5,"paused":true},
           {"id":"g5","resets_left":0}]}
         """)
-        let banked = try #require(ClaudeProvider.banked(cedar, now: now))
-        #expect(banked.count == 3)
-        #expect(banked.nextExpiry == ISODate.parse("2026-11-03T00:00:00Z"))
-        #expect(banked.grantID == "g1")
-        #expect(ClaudeProvider.banked(try decode(ClaudeProvider.CedarEmber.self, #"{"eligible":false,"grants":[{"resets_left":1}]}"#), now: now) == nil)
-        #expect(ClaudeProvider.banked(nil, now: now) == nil)
+        let banked = ClaudeProvider.banked(cedar, now: now)
+        #expect(banked == [BankedResets(kind: .full, count: 3, nextExpiry: ISODate.parse("2026-11-03T00:00:00Z"), grantID: "g1")])
+        #expect(ClaudeProvider.banked(try decode(ClaudeProvider.CedarEmber.self, #"{"eligible":false,"grants":[{"resets_left":1}]}"#), now: now).isEmpty)
+        #expect(ClaudeProvider.banked(nil, now: now).isEmpty)
     }
 
-    @Test func `no reset button when the next grant can't be used now`() throws {
-        let cedar = try decode(ClaudeProvider.CedarEmber.self, #"{"eligible":true,"next_grant_id":"g1","grants":[{"id":"g1","resets_left":1,"paused":false,"usable_now":false}]}"#)
-        let banked = try #require(ClaudeProvider.banked(cedar, now: now))
+    @Test func `claude grant kinds follow the CLI`() throws {
+        let cedar = try decode(ClaudeProvider.CedarEmber.self, """
+        {"grants":[
+          {"clears":["five_hour"]},
+          {"clears":["seven_day","seven_day_opus"]},
+          {"clears":["five_hour","seven_day"]},
+          {"clears":[]},
+          {},
+          {"clears":["five_hour"],"type":"weekly"},
+          {"clears":["five_hour"],"type":"something_new"},
+          {"clears":["five_hour"],"type":"session","gives_back_weekly":true}]}
+        """)
+        #expect(cedar.grants?.map(\.kind) == [.session, .weekly, .full, .full, .full, .weekly, .session, .fable])
+    }
+
+    @Test func `claude groups grants per kind in a fixed order, each with its own grant`() throws {
+        let cedar = try decode(ClaudeProvider.CedarEmber.self, """
+        {"eligible":true,"grants":[
+          {"id":"f1","resets_left":1,"gives_back_weekly":true,"usable_now":false,"ends_at":"2026-11-05T00:00:00Z"},
+          {"id":"f2","resets_left":1,"gives_back_weekly":true,"usable_now":true,"ends_at":"2026-11-03T00:00:00Z"},
+          {"id":"w1","resets_left":1,"clears":["seven_day"],"usable_now":true,"ends_at":"2026-10-21T14:00:00Z"},
+          {"id":"s1","resets_left":0,"clears":["five_hour"],"usable_now":true}]}
+        """)
+        let banked = ClaudeProvider.banked(cedar, now: now)
+        #expect(banked.map(\.kind) == [.weekly, .fable])
+        #expect(banked[0] == BankedResets(kind: .weekly, count: 1, nextExpiry: ISODate.parse("2026-10-21T14:00:00Z"), grantID: "w1"))
+        #expect(banked[1] == BankedResets(kind: .fable, count: 2, nextExpiry: ISODate.parse("2026-11-03T00:00:00Z"), grantID: "f2"))
+        #expect(banked[1].text(now: now).hasPrefix("2 Fable resets · next expires "))
+        #expect(banked[0].text(now: now).hasPrefix("1 weekly reset · expires "))
+    }
+
+    @Test func `a malformed grant is skipped and a malformed cedar_ember never fails usage`() throws {
+        let cedar = try decode(ClaudeProvider.CedarEmber.self, """
+        {"eligible":true,"grants":[
+          {"id":"bad","resets_left":"lots","clears":["five_hour"]},
+          7, null,
+          {"id":"ok","resets_left":1,"clears":["five_hour"],"usable_now":true}]}
+        """)
+        #expect(cedar.grants?.map(\.id) == ["ok"])
+        #expect(ClaudeProvider.banked(cedar, now: now).map(\.grantID) == ["ok"])
+
+        for cedar in [#""yes""#, #"{"eligible":"maybe","grants":{"id":1}}"#, "[1,2]"] {
+            let usage = try decode(ClaudeProvider.Usage.self, #"{"five_hour":{"utilization":10},"cedar_ember":\#(cedar)}"#)
+            #expect(usage.five_hour?.utilization == 10)
+            #expect(ClaudeProvider.banked(usage.cedar_ember, now: now).isEmpty)
+        }
+    }
+
+    @Test func `no reset button when the grant can't be used now`() throws {
+        let cedar = try decode(ClaudeProvider.CedarEmber.self, #"{"eligible":true,"grants":[{"id":"g1","resets_left":1,"paused":false,"usable_now":false}]}"#)
+        let banked = try #require(ClaudeProvider.banked(cedar, now: now).first)
         #expect(banked.count == 1)
         #expect(banked.grantID == nil)
         #expect(ClaudeProvider.claimMessage("reset").hasPrefix("Limits reset"))
         #expect(ClaudeProvider.claimMessage("something_new").contains("couldn't confirm"))
+    }
+
+    @Test func `saved state with the old single banked value still decodes`() throws {
+        let json = #"{"windows":[],"account":{},"details":[],"banked":{"count":2},"fetchedAt":0}"#
+        let snapshot = try decode(Snapshot.self, json)
+        #expect(snapshot.resets == nil)
     }
 
     @Test func `codex counts available unexpired credits`() throws {
@@ -186,6 +267,15 @@ struct BankedResetTests {
         let one = BankedResets(count: 1, nextExpiry: expiry).text(now: now)
         #expect(one.hasPrefix("1 banked reset · expires "))
         #expect(BankedResets(count: 2, nextExpiry: nil).text(now: now) == "2 banked resets")
+        #expect(BankedResets(kind: .session, count: 2, nextExpiry: nil).text(now: now) == "2 5-hour resets")
+    }
+}
+
+struct HTTPTests {
+    @Test func `retry after is clamped to 30 minutes`() {
+        #expect(HTTP.retryAfter("120") == 120)
+        #expect(HTTP.retryAfter("86400") == 1800)
+        #expect(HTTP.retryAfter("-5") == 0)
     }
 }
 
@@ -236,5 +326,43 @@ struct ServiceStatusTests {
          "components":[{"name":"Something new","status":"major_outage"}],"incidents":[]}
         """))
         #expect(status == ServiceStatus(title: "Major System Outage", severity: .major, link: page))
+    }
+}
+
+struct KeychainGateTests {
+    @Test func `a locked keychain is never read in the background, and does not latch`() throws {
+        let gate = KeychainGate()
+        var reads = 0
+        #expect(throws: ProviderError.keychainLocked) {
+            try gate.read(userInitiated: false, isUnlocked: { false }) { reads += 1; return .found(Data("x".utf8)) }
+        }
+        #expect(reads == 0)
+        #expect(!gate.isLatched)
+        #expect(try gate.read(userInitiated: false, isUnlocked: { true }) { reads += 1; return .notFound } == nil)
+        #expect(reads == 1)
+    }
+
+    @Test func `a failed background read stops background reads until an explicit read succeeds`() throws {
+        let gate = KeychainGate()
+        var reads = 0
+        #expect(throws: ProviderError.keychainBlocked) {
+            try gate.read(userInitiated: false, isUnlocked: { true }) { reads += 1; return .failed }
+        }
+        #expect(gate.isLatched)
+        #expect(throws: ProviderError.keychainBlocked) {
+            try gate.read(userInitiated: false, isUnlocked: { true }) { reads += 1; return .found(Data("x".utf8)) }
+        }
+        #expect(reads == 1)
+
+        #expect(throws: ProviderError.keychainBlocked) {
+            try gate.read(userInitiated: true, isUnlocked: { false }) { reads += 1; return .failed }
+        }
+        #expect(reads == 2)
+        #expect(gate.isLatched)
+
+        #expect(try gate.read(userInitiated: true, isUnlocked: { false }) { reads += 1; return .found(Data("x".utf8)) } == Data("x".utf8))
+        #expect(!gate.isLatched)
+        #expect(try gate.read(userInitiated: false, isUnlocked: { true }) { reads += 1; return .notFound } == nil)
+        #expect(reads == 4)
     }
 }

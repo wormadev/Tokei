@@ -8,7 +8,7 @@ private struct StubProvider: UsageProvider {
     var installed = true
     var activityFolder: URL { URL.temporaryDirectory }
     func isInstalled() -> Bool { installed }
-    func fetch() async throws -> Snapshot { throw ProviderError.http(500) }
+    func fetch(userInitiated: Bool) async throws -> Snapshot { throw ProviderError.http(500) }
 }
 
 private final class CountingProvider: UsageProvider, Sendable {
@@ -16,7 +16,7 @@ private final class CountingProvider: UsageProvider, Sendable {
     let fetches = Mutex(0)
     var activityFolder: URL { URL.temporaryDirectory }
     func isInstalled() -> Bool { true }
-    func fetch() async throws -> Snapshot {
+    func fetch(userInitiated: Bool) async throws -> Snapshot {
         fetches.withLock { $0 += 1 }
         try await Task.sleep(for: .milliseconds(100))
         throw ProviderError.http(500)
@@ -27,11 +27,30 @@ private func snapshot(used: Double, at date: Date) -> Snapshot {
     Snapshot(windows: [UsageWindow(id: "session", label: "Session", kind: .primary, used: used)], account: Account(), fetchedAt: date)
 }
 
+/// The test host is the real app, so UserDefaults.standard holds the developer's own settings and
+/// registerDefaults never ran. The argument domain outranks both and is never written to disk.
+@MainActor
+private func useTestDefaults() {
+    let defaults = UserDefaults.standard
+    var arguments = defaults.volatileDomain(forName: UserDefaults.argumentDomain)
+    for id in ProviderID.allCases { arguments[Prefs.enabledKey(id)] = true }
+    arguments[Prefs.showStatusKey] = false
+    arguments[Prefs.refreshIntervalKey] = Prefs.agentAwareInterval
+    defaults.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
+}
+
+private func tempStore() -> StateStore {
+    StateStore(url: URL.temporaryDirectory.appending(path: "tokei-test-\(UUID().uuidString).json"))
+}
+
 @MainActor
 struct RefresherTests {
-    private func makeRefresher() -> Refresher {
-        let store = StateStore(url: URL.temporaryDirectory.appending(path: "quota-test-\(UUID().uuidString).json"))
-        return Refresher(providers: [StubProvider(id: .claude)], store: store)
+    init() {
+        useTestDefaults()
+    }
+
+    private func makeRefresher(store: StateStore = tempStore()) -> Refresher {
+        Refresher(providers: [StubProvider(id: .claude)], store: store)
     }
 
     @Test func `error keeps the last good snapshot`() {
@@ -61,7 +80,7 @@ struct RefresherTests {
     @Test func `an expired sign-in notifies once and needs the user, a server error does neither`() {
         let refresher = makeRefresher()
         var notified: [String] = []
-        refresher.onSignInExpired = { notified.append($1) }
+        refresher.onSignInExpired = { _, hint, _ in notified.append(hint) }
         let now = Date(timeIntervalSince1970: 1_000_000)
         refresher.apply(.success(snapshot(used: 0.3, at: now)), to: .claude, now: now)
         refresher.apply(.failure(ProviderError.http(502)), to: .claude, now: now)
@@ -76,6 +95,39 @@ struct RefresherTests {
         #expect(refresher.states[.claude]?.needsSignIn == false)
         refresher.apply(.failure(ProviderError.unauthorized("Run `claude`")), to: .claude, now: now)
         #expect(notified.count == 2)
+    }
+
+    @Test func `a token past its saved expiry needs the user but does not notify, a server 401 notifies once`() {
+        let refresher = makeRefresher()
+        var calls: [(hint: String, rejected: Bool)] = []
+        refresher.onSignInExpired = { calls.append(($1, $2)) }
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        refresher.apply(.success(snapshot(used: 0.3, at: now)), to: .claude, now: now)
+        refresher.apply(.failure(ProviderError.signInExpired("Run `claude` once")), to: .claude, now: now)
+        refresher.apply(.failure(ProviderError.signInExpired("Run `claude` once")), to: .claude, now: now)
+        #expect(refresher.states[.claude]?.needsSignIn == true)
+        #expect(refresher.states[.claude]?.snapshot != nil)
+        #expect(calls.map(\.rejected) == [false])
+
+        refresher.apply(.success(snapshot(used: 0.3, at: now)), to: .claude, now: now)
+        refresher.apply(.failure(ProviderError.unauthorized("Run `claude`")), to: .claude, now: now)
+        refresher.apply(.failure(ProviderError.unauthorized("Run `claude`")), to: .claude, now: now)
+        #expect(calls.filter(\.rejected).map(\.hint) == ["Run `claude`"])
+    }
+
+    @Test func `an unreadable keychain keeps the numbers without a badge or notification`() {
+        let refresher = makeRefresher()
+        var notified = 0
+        refresher.onSignInExpired = { _, _, _ in notified += 1 }
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        refresher.apply(.success(snapshot(used: 0.3, at: now)), to: .claude, now: now)
+        refresher.apply(.failure(ProviderError.keychainLocked), to: .claude, now: now)
+        let state = refresher.states[.claude]
+        #expect(state?.snapshot?.windows.first?.used == 0.3)
+        #expect(state?.needsSignIn == false)
+        #expect(state?.keychainUnavailable == true)
+        #expect(state?.error == "Keychain is locked. Refresh to try again.")
+        #expect(notified == 0)
     }
 
     @Test func `a rate limit after a rejected sign-in keeps the sign-in alert`() {
@@ -106,7 +158,7 @@ struct RefresherTests {
     @Test func `a missing sign-in needs the user without an expiry notification`() {
         let refresher = makeRefresher()
         var notified = 0
-        refresher.onSignInExpired = { _, _ in notified += 1 }
+        refresher.onSignInExpired = { _, _, _ in notified += 1 }
         refresher.apply(.failure(ProviderError.notConfigured("Sign in")), to: .claude, now: .now)
         #expect(refresher.states[.claude]?.needsSignIn == true)
         #expect(notified == 0)
@@ -133,7 +185,57 @@ struct RefresherTests {
         let store = StateStore(url: URL.temporaryDirectory.appending(path: "tokei-test-\(UUID().uuidString).json"))
         let refresher = Refresher(providers: [StubProvider(id: .claude), StubProvider(id: .codex, installed: false)], store: store)
         #expect(refresher.installed == [.claude])
-        #expect(!refresher.enabled.contains(.codex))
+        #expect(refresher.enabled == [.claude])
+    }
+
+    @Test func `opening the panel waits out a 429 but retries other failures`() async throws {
+        let provider = CountingProvider()
+        let refresher = Refresher(providers: [provider], store: tempStore())
+        let then = Date.now.addingTimeInterval(-200)
+        refresher.apply(.failure(ProviderError.rateLimited(retryAfter: 3600)), to: .claude, now: then)
+        refresher.refreshStale()
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(provider.fetches.withLock { $0 } == 0)
+
+        refresher.apply(.failure(URLError(.notConnectedToInternet)), to: .claude, now: then)
+        #expect(try #require(refresher.states[.claude]?.retryAt) > .now)
+        refresher.refreshStale()
+        for _ in 0 ..< 30 where provider.fetches.withLock({ $0 }) == 0 {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        #expect(provider.fetches.withLock { $0 } == 1)
+    }
+
+    @Test func `reset alerts only for snapshots fetched this launch, recently, on the same account`() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let window = { (used: Double, resets: TimeInterval) in
+            UsageWindow(id: "session", label: "Session", kind: .primary, used: used, resetsAt: now.addingTimeInterval(resets), duration: 5 * 3600)
+        }
+        let snap = { (used: Double, resets: TimeInterval, at: TimeInterval, user: String) in
+            Snapshot(windows: [window(used, resets)], account: Account(user: user), fetchedAt: now.addingTimeInterval(at))
+        }
+        var alerts = 0
+
+        let refresher = makeRefresher()
+        refresher.onReset = { _, _ in alerts += 1 }
+        refresher.apply(.success(snap(0.6, 60, -3600, "a")), to: .claude, now: now.addingTimeInterval(-3600))
+        refresher.apply(.success(snap(0, 5 * 3600 + 60, 0, "a")), to: .claude, now: now)
+        #expect(alerts == 1)
+
+        refresher.apply(.success(snap(0.6, 5 * 3600 + 60, 0, "a")), to: .claude, now: now)
+        refresher.apply(.success(snap(0, 10 * 3600 + 60, 6 * 3600, "b")), to: .claude, now: now.addingTimeInterval(6 * 3600))
+        #expect(alerts == 1)
+
+        refresher.apply(.success(snap(0.6, 10 * 3600 + 60, 6 * 3600, "b")), to: .claude, now: now.addingTimeInterval(6 * 3600))
+        refresher.apply(.success(snap(0, 20 * 3600, 12 * 3600, "b")), to: .claude, now: now.addingTimeInterval(12 * 3600))
+        #expect(alerts == 1)
+
+        let store = tempStore()
+        store.save(.init(states: [.claude: ProviderState(snapshot: snap(0.6, -60, -3600, "a"))], history: History()))
+        let relaunched = makeRefresher(store: store)
+        relaunched.onReset = { _, _ in alerts += 1 }
+        relaunched.apply(.success(snap(0, 5 * 3600 - 60, 0, "a")), to: .claude, now: now)
+        #expect(alerts == 1)
     }
 
     @Test func `due after interval, and after retryAt when failing`() {

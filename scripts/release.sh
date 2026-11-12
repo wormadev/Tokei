@@ -13,7 +13,10 @@
 #   release.sh [--notes FILE] [--first-release] [--publish]
 #     --notes FILE        release notes, Markdown (default: release-notes/<version>.md, else generated)
 #     --first-release     allow a missing (404) live appcast
-#     --publish           tag v<version>, push the tag, create the GitHub release, bump the cask in $TAP_SLUG
+#     --publish           create the GitHub release and its v<version> tag, bump the cask in $TAP_SLUG
+#
+# Rerunning --publish is safe: before the release is published nothing is tagged, so a rerun redoes the
+# same version; once HEAD carries a v* tag, a rerun only bumps the cask.
 set -euo pipefail
 
 REPO_SLUG="wormadev/Tokei"
@@ -22,10 +25,14 @@ FEED_URL="https://github.com/$REPO_SLUG/releases/latest/download/appcast.xml"
 # What the app checks: counts opted-in installs (server/), then redirects to FEED_URL.
 APP_FEED_URL="https://tokei.worma.dev/api/appcast.xml"
 SPARKLE_ACCOUNT="tokei"
-DMGBUILD="dmgbuild==1.6.7"
+DMGBUILD=(--from "dmgbuild==1.6.7" --with "ds-store==1.3.3" --with "mac-alias==2.2.3")
 APP_NAME="Tokei"
 SIGN_IDENTITY="Developer ID Application"
 NOTARY_PROFILE="tokei-notary"
+
+# CI passes the token here, unexported, so xcodebuild, uvx and their packages never see it.
+RELEASE_TOKEN="${RELEASE_TOKEN:-}"
+export -n RELEASE_TOKEN
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$REPO/build/release"
@@ -46,6 +53,7 @@ done
 
 step() { echo; echo "== $*"; }
 fail() { echo "$*" >&2; exit 1; }
+with_token() { if [[ -n "$RELEASE_TOKEN" ]]; then GH_TOKEN="$RELEASE_TOKEN" "$@"; else "$@"; fi; }
 project_setting() { sed -n "s/^ *$1: *\"\(.*\)\"$/\1/p" "$REPO/project.yml" | head -1; }
 
 # Next patch after the latest v* tag, or the project.yml floor when that is higher.
@@ -59,13 +67,33 @@ next_version() {
   printf '%s\n%s\n' "$next" "$floor" | sort -V | tail -1
 }
 
-# feat/fix subjects since the last tag as Markdown bullets: "feat(x): add y (#3)" -> "- New: add y".
+# "feat(x): add y (#3)" -> "- New: add y"; drops everything but feat/fix.
+as_bullets() {
+  sed -nE -e 's/ \(#[0-9]+\)$//' -e 's/^feat(\([^)]*\))?!?: (.*)/- New: \2/p' -e 's/^fix(\([^)]*\))?!?: (.*)/- Fixed: \2/p'
+}
+
+# feat/fix subjects since the last tag as Markdown bullets, else a generic line.
 generated_notes() {
-  local range
+  local range notes
   range="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null)" && range="$range..HEAD" || range=HEAD
   # Squash merges carry the PR title in the subject, merge commits in the body.
-  git log --first-parent --format='%s%n%b' "$range" |
-    sed -nE -e 's/ \(#[0-9]+\)$//' -e 's/^feat(\([^)]*\))?!?: (.*)/- New: \2/p' -e 's/^fix(\([^)]*\))?!?: (.*)/- Fixed: \2/p'
+  notes="$(git log --first-parent --format='%s%n%b' "$range" | as_bullets)"
+  # A plain merge of feat/fix commits has neither: look at every commit.
+  [[ -n "$notes" ]] || notes="$(git log --format='%s' "$range" | as_bullets)"
+  [[ -n "$notes" ]] || notes="- Maintenance and reliability improvements."
+  echo "$notes"
+}
+
+# Idempotent, so a rerun can retry a failed push.
+bump_cask() {
+  local dmg="$1" tap="$OUT/tap" sha
+  rm -rf "$tap"
+  with_token gh repo clone "$TAP_SLUG" "$tap" -- -q
+  sha="$(shasum -a 256 "$dmg" | cut -d' ' -f1)"
+  sed -i '' -e "s/^  version \".*\"/  version \"$VERSION\"/" -e "s/^  sha256 \".*\"/  sha256 \"$sha\"/" "$tap/Casks/tokei.rb"
+  if git -C "$tap" diff --quiet; then echo "Cask is already at $VERSION."; return; fi
+  git -C "$tap" commit -qam "chore: tokei $VERSION"
+  with_token git -C "$tap" push -q
 }
 
 # Highest sparkle:version in the live appcast; 0 for a 404 only with --first-release.
@@ -87,6 +115,20 @@ step "Preconditions"
 grep -q "SPARKLE_FEED_URL: $APP_FEED_URL" project.yml || fail "SPARKLE_FEED_URL in project.yml is not $APP_FEED_URL."
 [[ -z "$(git status --porcelain)" ]] || fail "Working tree has uncommitted changes: commit them so the tag matches the build."
 [[ "$(git branch --show-current)" == main ]] || fail "Release from main: Sparkle's build number is main's commit count."
+git fetch -q origin --tags
+[[ -n "${CI:-}" || "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] ||
+  fail "HEAD is not origin/main: pull or push first so the release is what main has."
+PUBLISHED="$(git tag --points-at HEAD --list 'v*' | sort -V | tail -1)"
+if [[ $PUBLISH == 1 && -n "$PUBLISHED" ]]; then
+  VERSION="${PUBLISHED#v}"
+  step "Homebrew cask ($PUBLISHED is already released from HEAD)"
+  mkdir -p "$OUT/published"
+  with_token gh release download "$PUBLISHED" --repo "$REPO_SLUG" --pattern "$APP_NAME-$VERSION.dmg" \
+    --dir "$OUT/published" --clobber
+  bump_cask "$OUT/published/$APP_NAME-$VERSION.dmg"
+  echo "Bumped the cask to $APP_NAME $VERSION."
+  exit 0
+fi
 [[ -n "$(project_setting MARKETING_VERSION)" ]] || fail "No MARKETING_VERSION in project.yml."
 VERSION="$(next_version)"
 # Sparkle compares CFBundleVersion: the commit count only grows on main.
@@ -95,7 +137,6 @@ BUILD="$(git rev-list --count HEAD)"
 if [[ -z "$NOTES" ]]; then
   NOTES="$(mktemp)"
   generated_notes > "$NOTES"
-  [[ -s "$NOTES" ]] || fail "No feat/fix commits since the last tag: nothing to release, or write release-notes/$VERSION.md."
 fi
 [[ -f "$NOTES" ]] || fail "No release notes at $NOTES."
 ! git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null || fail "Tag v$VERSION already exists."
@@ -107,8 +148,13 @@ cat "$NOTES"
 APP="$DERIVED/Build/Products/Release/$APP_NAME.app"
 DMG="$OUT/updates/$APP_NAME-$VERSION.dmg"
 
-step "Release build"
+step "Tests"
 xcodegen generate >/dev/null
+# Unsigned: CI has no Xcode account for the Automatic signing that Debug uses.
+xcodebuild -project "$APP_NAME.xcodeproj" -scheme "$APP_NAME" -derivedDataPath "$DERIVED" \
+  CODE_SIGNING_ALLOWED=NO test -quiet
+
+step "Release build"
 rm -rf "$OUT"
 mkdir -p "$OUT/updates"
 # Manual signing: automatic signing needs an Xcode account, which CI doesn't have.
@@ -128,7 +174,7 @@ codesign --verify --deep --strict "$APP"
 [[ "$(plutil -extract SUFeedURL raw "$APP/Contents/Info.plist")" == "$APP_FEED_URL" ]] || fail "$APP has a foreign SUFeedURL."
 
 step "DMG"
-uvx --from "$DMGBUILD" dmgbuild -s "$REPO/scripts/dmg-settings.py" -D app="$APP" "$APP_NAME" "$DMG"
+uvx "${DMGBUILD[@]}" dmgbuild -s "$REPO/scripts/dmg-settings.py" -D app="$APP" "$APP_NAME" "$DMG"
 hdiutil verify "$DMG" >/dev/null
 codesign --sign "$SIGN_IDENTITY" --timestamp "$DMG"
 
@@ -161,16 +207,15 @@ if [[ $PUBLISH == 0 ]]; then
 fi
 
 step "Publish"
-git tag -a "v$VERSION" -m "$APP_NAME $VERSION ($BUILD)"
-git push origin "v$VERSION"
-gh release create "v$VERSION" --repo "$REPO_SLUG" --title "$APP_NAME $VERSION" --notes-file "$NOTES" \
-  "$DMG" "$OUT/$APP_NAME.dmg" "$OUT/updates/appcast.xml"
+# gh uploads to a draft and publishes last, so a failed upload leaves a draft and no tag.
+for id in $(with_token gh api "repos/$REPO_SLUG/releases" --jq ".[] | select(.draft and .tag_name == \"v$VERSION\") | .id"); do
+  with_token gh api -X DELETE "repos/$REPO_SLUG/releases/$id" >/dev/null
+done
+# GitHub creates the tag when the release is published, not before.
+with_token gh release create "v$VERSION" --repo "$REPO_SLUG" --target "$(git rev-parse HEAD)" \
+  --title "$APP_NAME $VERSION" --notes-file "$NOTES" "$DMG" "$OUT/$APP_NAME.dmg" "$OUT/updates/appcast.xml"
+git fetch -q origin --tags
 
 step "Homebrew cask"
-TAP="$OUT/tap"
-gh repo clone "$TAP_SLUG" "$TAP" -- -q
-SHA="$(shasum -a 256 "$DMG" | cut -d' ' -f1)"
-sed -i '' -e "s/^  version \".*\"/  version \"$VERSION\"/" -e "s/^  sha256 \".*\"/  sha256 \"$SHA\"/" "$TAP/Casks/tokei.rb"
-git -C "$TAP" commit -qam "chore: tokei $VERSION"
-git -C "$TAP" push -q
+bump_cask "$DMG"
 echo "Published $APP_NAME $VERSION: release, appcast and cask."

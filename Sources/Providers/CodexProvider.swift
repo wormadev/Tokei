@@ -28,7 +28,7 @@ struct CodexProvider: UsageProvider {
         Executable.exists("codex") || FileManager.default.fileExists(atPath: Self.authFile.path)
     }
 
-    func fetch() async throws -> Snapshot {
+    func fetch(userInitiated: Bool) async throws -> Snapshot {
         guard let data = try? Data(contentsOf: Self.authFile),
               let tokens = (try? JSONDecoder().decode(Auth.self, from: data))?.tokens
         else {
@@ -36,7 +36,7 @@ struct CodexProvider: UsageProvider {
         }
         let expiresAt = JWT(tokens.access_token)?.expiresAt
         if let expiresAt, expiresAt <= .now {
-            throw ProviderError.unauthorized("Sign-in expired. Run `codex` once to refresh it.")
+            throw ProviderError.signInExpired("Sign-in expired. Run `codex` once to refresh it.")
         }
         var headers = [
             "Authorization": "Bearer \(tokens.access_token)",
@@ -54,7 +54,7 @@ struct CodexProvider: UsageProvider {
             ResetCredits.self, URLRequest("https://chatgpt.com/backend-api/wham/rate-limit-reset-credits", headers: creditHeaders), unauthorizedHint: hint
         )
         var snapshot = Self.snapshot(usage: usage, idToken: tokens.id_token)
-        snapshot.banked = Self.banked(credits)
+        snapshot.resets = Self.banked(credits).map { [$0] }
         snapshot.signInExpiresAt = expiresAt
         return snapshot
     }
@@ -111,16 +111,18 @@ struct CodexProvider: UsageProvider {
             .map { slot, window, percent in
                 let seconds = window.limit_window_seconds
                 let isSession = seconds.map { $0 <= 6 * 3600 }
+                let label = seconds.map { $0 <= 6 * 3600 ? "Session" : $0 > 8 * 86400 ? "Monthly" : "Weekly" }
                 return UsageWindow(
                     // Unknown length: keep slot-based ids so the two windows stay distinct.
                     id: isSession.map { $0 ? "session" : "weekly" } ?? slot,
-                    label: isSession.map { $0 ? "Session" : "Weekly" } ?? slot.capitalized,
+                    label: label ?? slot.capitalized,
                     kind: .primary,
                     used: percent / 100,
                     resetsAt: window.reset_at.map { Date(timeIntervalSince1970: $0) },
                     duration: seconds
                 )
             }
+            .withUniqueIDs()
         var details: [Detail] = []
         if let credits = usage.credits {
             if credits.unlimited == true {

@@ -56,31 +56,46 @@ export function stats(db: Database, today: string) {
 }
 
 // A few requests per minute per address is plenty for an update check; addresses live only in memory.
-const hits = new Map<string, number>();
-function limited(ip: string) {
+function limited(hits: Map<string, number>, ip: string) {
   const n = (hits.get(ip) ?? 0) + 1;
   hits.set(ip, n);
   return n > 30;
 }
 
+export function handler(db: Database, hits: Map<string, number>) {
+  return (req: Request, ip: string) => {
+    const url = new URL(req.url);
+    if (limited(hits, ip)) return new Response("Too many requests", { status: 429 });
+    const today = new Date().toISOString().slice(0, 10);
+    if (url.pathname === "/api/appcast.xml") {
+      // A failed write (disk full, readonly) must not break the update check. The URL carries the id: don't log it.
+      try {
+        record(db, url.searchParams, today);
+      } catch (error) {
+        console.error(`checkin not recorded: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      return new Response(null, { status: 302, headers: { location: UPSTREAM, "cache-control": "no-store" } });
+    }
+    if (url.pathname === "/api/stats") {
+      return Response.json(stats(db, today), { headers: { "cache-control": "no-store" } });
+    }
+    return new Response("Not found", { status: 404 });
+  };
+}
+
 if (import.meta.main) {
   const db = openDb(process.env.DB_PATH ?? "/data/tokei.db");
+  const hits = new Map<string, number>();
   setInterval(() => hits.clear(), 60_000);
+  const handle = handler(db, hits);
   Bun.serve({
     port: Number(process.env.PORT ?? 3000),
     fetch(req, server) {
-      const url = new URL(req.url);
-      const ip = req.headers.get("cf-connecting-ip") ?? server.requestIP(req)?.address ?? "";
-      if (limited(ip)) return new Response("Too many requests", { status: 429 });
-      const today = new Date().toISOString().slice(0, 10);
-      if (url.pathname === "/api/appcast.xml") {
-        record(db, url.searchParams, today);
-        return new Response(null, { status: 302, headers: { location: UPSTREAM, "cache-control": "no-store" } });
-      }
-      if (url.pathname === "/api/stats") {
-        return Response.json(stats(db, today), { headers: { "cache-control": "no-store" } });
-      }
-      return new Response("Not found", { status: 404 });
+      return handle(req, req.headers.get("cf-connecting-ip") ?? server.requestIP(req)?.address ?? "");
+    },
+    error(error) {
+      console.error(error.message);
+      return new Response("Internal Server Error", { status: 500 });
     },
   });
 }

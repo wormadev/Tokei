@@ -6,8 +6,19 @@ enum HTTP {
         config.timeoutIntervalForRequest = 20
         config.timeoutIntervalForResource = 40
         config.urlCache = nil
-        return URLSession(configuration: config)
+        return URLSession(configuration: config, delegate: SameHostRedirects(), delegateQueue: nil)
     }()
+
+    /// Requests carry the bearer token; a redirect to another host must not take it along.
+    private final class SameHostRedirects: NSObject, URLSessionTaskDelegate, Sendable {
+        func urlSession(
+            _ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest
+        ) async -> URLRequest? {
+            request.url?.host() == task.originalRequest?.url?.host() ? request : nil
+        }
+    }
+
+    static let maxRetryAfter: TimeInterval = 30 * 60
 
     /// Sends the request and maps 401/403/429/non-2xx to `ProviderError`.
     /// `unauthorizedHint` is what the user should do when credentials are rejected.
@@ -17,7 +28,10 @@ enum HTTP {
         switch http.statusCode {
         case 200 ..< 300:
             return data
-        case 401, 403:
+        case 401:
+            throw ProviderError.unauthorized(unauthorizedHint)
+        // A Cloudflare challenge is a 403 HTML page, not a rejected sign-in.
+        case 403 where http.value(forHTTPHeaderField: "Content-Type")?.lowercased().contains("json") == true:
             throw ProviderError.unauthorized(unauthorizedHint)
         case 429:
             throw ProviderError.rateLimited(retryAfter: retryAfter(http.value(forHTTPHeaderField: "Retry-After")))
@@ -55,12 +69,12 @@ enum HTTP {
     /// Retry-After is either delta-seconds or an HTTP date.
     static func retryAfter(_ value: String?, now: Date = .now) -> TimeInterval? {
         guard let value = value?.trimmingCharacters(in: .whitespaces), !value.isEmpty else { return nil }
-        if let seconds = TimeInterval(value) { return max(0, seconds) }
+        if let seconds = TimeInterval(value) { return min(max(0, seconds), maxRetryAfter) }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(identifier: "GMT")
         formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
-        return formatter.date(from: value).map { max(0, $0.timeIntervalSince(now)) }
+        return formatter.date(from: value).map { min(max(0, $0.timeIntervalSince(now)), maxRetryAfter) }
     }
 }
 

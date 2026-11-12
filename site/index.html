@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tokei: your AI plan limits, in the menu bar</title>
 <meta name="description" content="See how much of your Claude and Codex plan is left, when it resets, and whether your pace lasts until then. A free menu bar app for macOS.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Tokei: your AI plan limits, in the menu bar">
+<meta property="og:description" content="See how much of your Claude and Codex plan is left, when it resets, and whether your pace lasts until then. A free menu bar app for macOS.">
+<meta property="og:url" content="https://tokei.worma.dev/">
+<meta property="og:image" content="https://tokei.worma.dev/img/tokei-poster.jpg?v=2">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Tokei: your AI plan limits, in the menu bar">
+<meta name="twitter:description" content="See how much of your Claude and Codex plan is left, when it resets, and whether your pace lasts until then. A free menu bar app for macOS.">
+<meta name="twitter:image" content="https://tokei.worma.dev/img/tokei-poster.jpg?v=2">
 <link rel="icon" href="img/icon.png?v=2" type="image/png">
 <link rel="preload" href="fonts/fraunces.woff2?v=2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css?v=2">
@@ -42,7 +51,7 @@
   </section>
 
   <section class="film">
-    <video class="r" src="img/tokei.mp4?v=2" poster="img/tokei-poster.jpg?v=2" autoplay muted loop playsinline controls preload="metadata" aria-label="A 17-second tour of Tokei"></video>
+    <video class="r" src="img/tokei.mp4?v=2" poster="img/tokei-poster.jpg?v=2" muted loop playsinline controls preload="metadata" aria-label="A 17-second tour of Tokei"></video>
   </section>
 
   <section id="features" class="feature">
@@ -88,12 +97,7 @@
     <h3 class="r">Homebrew</h3>
     <div class="cmd r"><code><b>brew</b> install --cask wormadev/tap/tokei</code><button class="copy" type="button" data-copy="brew install --cask wormadev/tap/tokei">Copy</button></div>
     <h3 class="r">Download</h3>
-    <p class="r">Tokei isn't notarized by Apple yet, so macOS asks once:</p>
-    <ol class="r">
-      <li>Open the DMG and drag Tokei to Applications.</li>
-      <li>Open Tokei. macOS says it can't check it for malicious software.</li>
-      <li>Go to System Settings &gt; Privacy &amp; Security and click Open Anyway.</li>
-    </ol>
+    <p class="r">Open the DMG and drag Tokei to Applications. It's signed with a Developer ID and notarized by Apple, so it opens like any other app.</p>
     <a class="button r" href="https://github.com/wormadev/Tokei/releases/latest/download/Tokei.dmg">Download Tokei.dmg</a>
     <h3 class="r">Then</h3>
     <p class="r">Sign in to <a href="https://docs.anthropic.com/en/docs/claude-code">Claude Code</a> or <a href="https://github.com/openai/codex">Codex</a> once, if you haven't. Tokei reads the sign-in they already saved and shows up in the menu bar.</p>
@@ -110,8 +114,8 @@
       <p>No. Tokei never refreshes their tokens: the refresh token belongs to the CLI, and rotating it would sign the CLI out. When a token expires, Tokei asks you to run <code>claude</code> or <code>codex</code> again.</p>
     </details>
     <details class="r">
-      <summary>Why does it ask for Keychain access?</summary>
-      <p>Claude Code keeps its sign-in in the Keychain. Tokei reads it only after you click Connect in Settings, and background refreshes never trigger a prompt. If the sign-in file in <code>~/.claude</code> is current, no Keychain access is needed.</p>
+      <summary>Does it need Keychain access?</summary>
+      <p>Claude Code keeps its sign-in in the Keychain. Tokei reads it through macOS's <code>security</code> tool, which Claude Code's Keychain item already trusts, so there's no prompt. If the sign-in file in <code>~/.claude</code> is current, no Keychain access is needed.</p>
     </details>
     <details class="r">
       <summary>Which plans does it work with?</summary>
@@ -138,6 +142,7 @@
 <script>
 (() => {
   if (!document.documentElement.classList.contains("js")) return;
+  document.querySelector(".film video").play();
   const sections = document.querySelectorAll("main > section");
   sections.forEach(sec => sec.querySelectorAll(".r").forEach((el, i) => el.style.setProperty("--i", i)));
   const io = new IntersectionObserver(entries => entries.forEach(e => {

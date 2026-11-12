@@ -32,7 +32,7 @@ enum Prefs {
             menuBarIconKey: MenuBarIcon.tokei.rawValue,
             showAccountKey: true,
             showDetailsKey: false,
-            showModelLimitsKey: false,
+            showModelLimitsKey: true,
             showHistoryKey: false,
             absoluteResetsKey: false,
             showPaceKey: true,
