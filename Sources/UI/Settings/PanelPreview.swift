@@ -10,7 +10,7 @@ struct PanelPreview: View {
     @AppStorage(Prefs.showAccountKey) private var showAccount = true
     @AppStorage(Prefs.showStatusKey) private var showStatus = true
     @AppStorage(Prefs.showDetailsKey) private var showDetails = false
-    @AppStorage(Prefs.showModelLimitsKey) private var showModelLimits = false
+    @AppStorage(Prefs.showModelLimitsKey) private var showModelLimits = true
     @AppStorage(Prefs.showHistoryKey) private var showHistory = false
     @AppStorage(Prefs.providerOrderKey) private var orderRaw = ""
     /// `refresher.enabled` reads UserDefaults, which SwiftUI doesn't observe; bump on any change.

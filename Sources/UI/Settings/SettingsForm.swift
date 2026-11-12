@@ -14,7 +14,7 @@ struct SettingsForm: View {
     @AppStorage(Prefs.showAccountKey) private var showAccount = true
     @AppStorage(Prefs.showStatusKey) private var showStatus = true
     @AppStorage(Prefs.showDetailsKey) private var showDetails = false
-    @AppStorage(Prefs.showModelLimitsKey) private var showModelLimits = false
+    @AppStorage(Prefs.showModelLimitsKey) private var showModelLimits = true
     @AppStorage(Prefs.showHistoryKey) private var showHistory = false
 
     private var order: [ProviderID] {
