@@ -79,34 +79,42 @@ struct PanelPreview: View {
 /// The status item as it renders now, beside stand-in menu bar neighbors.
 private struct MenuBarPreview: View {
     let refresher: Refresher
-    @AppStorage(Prefs.menuBarIconKey) private var icon = MenuBarIcon.tokei
-    @AppStorage(Prefs.menuBarSessionKey) private var session = true
-    @AppStorage(Prefs.menuBarWeeklyKey) private var weekly = false
-    @AppStorage(Prefs.usageDisplayKey) private var usageDisplay = UsageDisplay.used.rawValue
+    /// The status item reads UserDefaults directly; bump on any change to redraw.
+    @State private var defaultsChanges = 0
     @AppStorage(Prefs.providerOrderKey) private var order = ""
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// Same as the real items: one per provider when set to each.
+    private var icons: [MenuBarIcon] {
+        let _ = (defaultsChanges, order)
+        let config = MenuBarConfig.current
+        let enabled = refresher.enabled
+        let providers: [ProviderID?] = config.each && !enabled.isEmpty ? enabled : [nil]
+        return providers.map { provider in
+            var itemConfig = config
+            if let provider { itemConfig.provider = provider }
+            return MenuBarIcon.make(states: refresher.states, enabled: enabled, config: itemConfig, display: .current)
+        }
+    }
+
     var body: some View {
-        let _ = order
-        let display = UsageDisplay(rawValue: usageDisplay) ?? .used
-        let rings = StatusBarController.ringValues(refresher.states, enabled: refresher.enabled)
-        let lines = StatusBarController.menuLines(rings, weekly: weekly, session: session, display: display)
-        // Same fallback as the real item: no icon and no numbers would leave nothing to click.
-        let shown: MenuBarIcon = icon == .none && lines.isEmpty ? .tokei : icon
-        let image = StatusBarController.statusImage(rings, lines: lines, display: display, icon: shown)
+        let icons = icons
         HStack(spacing: 16) {
             Spacer(minLength: 0)
             Image(systemName: "wifi").accessibilityHidden(true)
             Image(systemName: "battery.75percent").accessibilityHidden(true)
-            Image(nsImage: image)
-                .renderingMode(.template)
-                .padding(.horizontal, 4)
-                .frame(height: 22)
-                .background(.fill.tertiary, in: .rect(cornerRadius: Design.innerRadius))
-                .id(image.size.width)
-                .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                .accessibilityLabel("Menu bar preview")
-                .accessibilityValue(lines.joined(separator: ", "))
+            HStack(spacing: 8) {
+                ForEach(icons.indices, id: \.self) { index in
+                    Image(nsImage: icons[index].image()).renderingMode(.template)
+                }
+            }
+            .padding(.horizontal, 4)
+            .frame(height: 22)
+            .background(.fill.tertiary, in: .rect(cornerRadius: Design.innerRadius))
+            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Menu bar preview")
+            .accessibilityValue(icons.flatMap(\.lines).joined(separator: ", "))
             TimelineView(.everyMinute) { context in
                 Text(context.date.formatted(.dateTime.weekday(.abbreviated).hour().minute()))
             }
@@ -115,7 +123,9 @@ private struct MenuBarPreview: View {
         .font(.callout)
         .padding(.horizontal, 12)
         .frame(height: 28)
-        .animation(reduceMotion ? nil : .smooth, value: lines)
-        .animation(reduceMotion ? nil : .smooth, value: shown)
+        .animation(reduceMotion ? nil : .smooth, value: icons)
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification).receive(on: RunLoop.main)) { _ in
+            defaultsChanges += 1
+        }
     }
 }

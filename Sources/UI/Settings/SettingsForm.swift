@@ -5,9 +5,6 @@ struct SettingsForm: View {
     let refresher: Refresher
 
     @AppStorage(Prefs.providerOrderKey) private var orderRaw = ""
-    @AppStorage(Prefs.menuBarIconKey) private var menuBarIcon = MenuBarIcon.tokei
-    @AppStorage(Prefs.menuBarSessionKey) private var menuBarSession = true
-    @AppStorage(Prefs.menuBarWeeklyKey) private var menuBarWeekly = false
     @AppStorage(Prefs.usageDisplayKey) private var usageDisplay = UsageDisplay.used.rawValue
     @AppStorage(Prefs.absoluteResetsKey) private var absoluteResets = false
     @AppStorage(Prefs.showPaceKey) private var showPace = true
@@ -16,6 +13,7 @@ struct SettingsForm: View {
     @AppStorage(Prefs.showDetailsKey) private var showDetails = false
     @AppStorage(Prefs.showModelLimitsKey) private var showModelLimits = true
     @AppStorage(Prefs.showHistoryKey) private var showHistory = false
+    @AppStorage(Prefs.showBankedKey) private var showBanked = true
 
     private var order: [ProviderID] {
         let _ = orderRaw
@@ -44,13 +42,7 @@ struct SettingsForm: View {
                     .help("The first provider leads the panel and drives the menu bar")
                 }
             }
-            Section("Menu bar") {
-                Picker("Icon", selection: $menuBarIcon) {
-                    ForEach(MenuBarIcon.allCases) { Text($0.label).tag($0) }
-                }
-                Toggle("5-hour session number", isOn: $menuBarSession)
-                Toggle("Weekly number", isOn: $menuBarWeekly)
-            }
+            Section("Menu bar") { MenuBarSettings(refresher: refresher) }
             Section("Panel") {
                 Picker("Usage", selection: $usageDisplay) {
                     ForEach(UsageDisplay.allCases) { Text($0.label).tag($0.rawValue) }
@@ -66,6 +58,8 @@ struct SettingsForm: View {
                 Toggle("Account and plan", isOn: $showAccount)
                 Toggle("Service status", isOn: $showStatus)
                     .help("Outages of Claude Code or Codex from status.claude.com and status.openai.com")
+                toggle("Banked resets", isOn: $showBanked, available: snapshots.contains { !($0.resets ?? []).isEmpty },
+                       note: "None of your providers have banked resets right now.")
                 toggle("Spend and credits", isOn: $showDetails, available: snapshots.contains { !$0.details.isEmpty },
                        note: "None of your providers report spend or credits right now.")
                 toggle("Per-model limits", isOn: $showModelLimits, available: snapshots.contains { $0.windows.contains { $0.kind == .secondary } },

@@ -1,4 +1,5 @@
 import AppKit
+import UserNotifications
 import SwiftUI
 
 @main
@@ -15,6 +16,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var refresher: Refresher!
     private var connector: Connector!
     private var statusBar: StatusBarController!
+    private var hotKey: HotKey?
+    private var reminders: Reminders?
     private lazy var settings = SettingsWindowController(refresher: refresher, connector: connector)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -28,17 +31,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         refresher.onReset = { Notifier.postReset($0, $1) }
         Notifier.requestPermissionIfEnabled()
         connector = Connector(refresher: refresher)
+        refresher.onRunningLow = { Notifier.postRunningLow($0, $1, threshold: $2) }
+        UNUserNotificationCenter.current().delegate = self
         // Only a server rejection notifies; a token that merely passed its expiry renews silently.
-        refresher.onSignInExpired = { [connector] id, hint, rejected in
+        refresher.onSignInExpired = { [connector] id, _, rejected in
             guard UserDefaults.standard.bool(forKey: Prefs.renewSignInKey), let connector else {
-                if rejected { Notifier.postSignInExpired(id, hint: hint) }
+                if rejected { Notifier.postSignInExpired(id) }
                 return
             }
             Task {
-                if await !connector.renewSignIn(id, userInitiated: false), rejected { Notifier.postSignInExpired(id, hint: hint) }
+                if await !connector.renewSignIn(id, userInitiated: false), rejected { Notifier.postSignInExpired(id) }
             }
         }
         statusBar = StatusBarController(refresher: refresher, connector: connector, openSettings: { [weak self] in self?.settings.show() })
+        hotKey = HotKey { [weak self] in self?.statusBar.togglePanel() }
+        reminders = Reminders(refresher: refresher, post: Notifier.postReminder)
         refresher.start()
         Updater.shared.start()
         #if DEBUG
@@ -68,5 +75,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             main.addItem(withTitle: menu.title, action: nil, keyEquivalent: "").submenu = menu
         }
         return main
+    }
+}
+
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    /// Every notification is about something in the panel, so a click opens it.
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        await MainActor.run { statusBar?.showPanel() }
+    }
+
+    /// An accessory app counts as frontmost while its panel is open; show banners anyway.
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+        [.banner, .sound]
     }
 }

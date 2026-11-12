@@ -4,9 +4,13 @@ import Foundation
 enum Prefs {
     static let refreshIntervalKey = "refreshInterval"
     static let usageDisplayKey = "usageDisplay"
-    static let menuBarWeeklyKey = "menuBar.weekly"
-    static let menuBarSessionKey = "menuBar.session"
-    static let menuBarIconKey = "menuBar.icon"
+    static let menuBarProviderKey = "menuBar.provider"
+    static let menuBarFirstKey = "menuBar.first"
+    static let menuBarSecondKey = "menuBar.second"
+    static let menuBarStyleKey = "menuBar.style"
+    static let menuBarNumbersKey = "menuBar.numbers"
+    static let menuBarLogoKey = "menuBar.logo"
+    static let showBankedKey = "show.banked"
     static let showAccountKey = "show.account"
     static let showDetailsKey = "show.details"
     static let showModelLimitsKey = "show.modelLimits"
@@ -16,9 +20,14 @@ enum Prefs {
     static let showStatusKey = "show.status"
     static let notifyResetsKey = "notify.resets"
     static let notifySignInKey = "notify.signIn"
+    static let notifyLowKey = "notify.low"
+    static let notifyUnusedKey = "notify.unused"
+    static let notifyBankedKey = "notify.banked"
     static let renewSignInKey = "renewSignIn"
     static let providerOrderKey = "providerOrder"
     static let refreshOnOpenKey = "refreshOnOpen"
+    /// `HotKey.Shortcut.stored`; empty or missing: none.
+    static let hotKeyKey = "hotKey"
 
     static func enabledKey(_ id: ProviderID) -> String { "enabled.\(id.rawValue)" }
 
@@ -27,9 +36,13 @@ enum Prefs {
             refreshIntervalKey: agentAwareInterval,
             refreshOnOpenKey: true,
             usageDisplayKey: UsageDisplay.used.rawValue,
-            menuBarWeeklyKey: false,
-            menuBarSessionKey: true,
-            menuBarIconKey: MenuBarIcon.tokei.rawValue,
+            menuBarProviderKey: "",
+            menuBarFirstKey: "session",
+            menuBarSecondKey: "weekly",
+            menuBarStyleKey: MenuBarConfig.Style.rings.rawValue,
+            menuBarNumbersKey: MenuBarConfig.Numbers.first.rawValue,
+            menuBarLogoKey: false,
+            showBankedKey: true,
             showAccountKey: true,
             showDetailsKey: false,
             showModelLimitsKey: true,
@@ -39,11 +52,41 @@ enum Prefs {
             showStatusKey: true,
             notifyResetsKey: true,
             notifySignInKey: true,
+            notifyLowKey: true,
+            notifyUnusedKey: false,
+            notifyBankedKey: true,
             renewSignInKey: false,
         ]
         for id in ProviderID.allCases { defaults[enabledKey(id)] = true }
         UserDefaults.standard.register(defaults: defaults)
+        migrateMenuBarNumbers()
     }
+
+    /// 0.1 had two number toggles, session and weekly, next to fixed rings; 0.1.5 added an
+    /// icon choice: the rings, a logo instead of them, or nothing.
+    private static func migrateMenuBarNumbers(_ defaults: UserDefaults = .standard) {
+        if let icon = defaults.string(forKey: "menuBar.icon") {
+            if icon != "tokei" { defaults.set(MenuBarConfig.Style.none.rawValue, forKey: menuBarStyleKey) }
+            if icon == "claude" || icon == "codex" { defaults.set(true, forKey: menuBarLogoKey) }
+            defaults.removeObject(forKey: "menuBar.icon")
+        }
+        let session = defaults.object(forKey: "menuBar.session") as? Bool
+        let weekly = defaults.object(forKey: "menuBar.weekly") as? Bool
+        guard session != nil || weekly != nil else { return }
+        let numbers: MenuBarConfig.Numbers = switch (session ?? true, weekly ?? false) {
+        case (true, true): .all
+        case (false, false): .hidden
+        default: .first
+        }
+        if session == false, weekly == true {
+            defaults.set("weekly", forKey: menuBarFirstKey)
+            defaults.set("session", forKey: menuBarSecondKey)
+        }
+        defaults.set(numbers.rawValue, forKey: menuBarNumbersKey)
+        defaults.removeObject(forKey: "menuBar.session")
+        defaults.removeObject(forKey: "menuBar.weekly")
+    }
+
 
     /// Stored refresh setting: seconds, `neverInterval` or `agentAwareInterval`.
     static let neverInterval = -1
@@ -104,33 +147,5 @@ enum UsageDisplay: String, CaseIterable, Identifiable {
 
     func text(_ used: Double) -> String {
         "\(Int((value(used) * 100).rounded()))%"
-    }
-}
-
-/// What sits left of the menu bar numbers. Tokei is the live usage rings; the logos are static marks.
-enum MenuBarIcon: String, CaseIterable, Identifiable {
-    case tokei, claude, codex, none
-    var id: String { rawValue }
-
-    static var current: MenuBarIcon {
-        MenuBarIcon(rawValue: UserDefaults.standard.string(forKey: Prefs.menuBarIconKey) ?? "") ?? .tokei
-    }
-
-    var label: String {
-        switch self {
-        case .tokei: "Tokei rings"
-        case .claude: "Claude"
-        case .codex: "Codex"
-        case .none: "None"
-        }
-    }
-
-    /// Image set in Assets.xcassets; nil for the drawn rings and for no icon.
-    var markName: String? {
-        switch self {
-        case .claude: "ClaudeMark"
-        case .codex: "CodexMark"
-        case .tokei, .none: nil
-        }
     }
 }

@@ -37,6 +37,8 @@ final class Refresher {
     private(set) var statuses: [ProviderID: ServiceStatus] = [:]
 
     @ObservationIgnored var onReset: ((ProviderID, UsageWindow) -> Void)?
+    /// A limit crossed one of `lowThresholds` (share used) since the last fetch.
+    @ObservationIgnored var onRunningLow: ((ProviderID, UsageWindow, Double) -> Void)?
     /// rejected: the server refused the sign-in. False when only the saved expiry passed.
     @ObservationIgnored var onSignInExpired: ((ProviderID, String, Bool) -> Void)?
     @ObservationIgnored private let providers: [ProviderID: any UsageProvider]
@@ -94,15 +96,19 @@ final class Refresher {
         for id in enabled { Task { await refresh(id, userInitiated: true) } }
     }
 
-    /// Panel opened: anything older than a minute is worth a quiet refresh.
-    func refreshStale(maxAge: TimeInterval = 120) {
+    /// Panel opened: refresh everything, except what was just fetched or is rate limited.
+    func refreshOnOpen(now: Date = .now) {
         detectInstalled()
-        let now = Date.now
-        for id in enabled where (states[id]?.lastAttempt).map({ now.timeIntervalSince($0) > maxAge }) ?? true {
-            // Other failures (no network after wake) are worth retrying right away.
-            if let state = states[id], state.rateLimited == true, let retryAt = state.retryAt, retryAt > now { continue }
+        for id in enabled where Self.isStaleOnOpen(states[id], now: now) {
             Task { await refresh(id) }
         }
+    }
+
+    /// Other failures (no network after wake) are worth retrying right away.
+    nonisolated static func isStaleOnOpen(_ state: ProviderState?, now: Date) -> Bool {
+        guard let state, let last = state.lastAttempt else { return true }
+        if state.rateLimited == true, let retryAt = state.retryAt, retryAt > now { return false }
+        return now.timeIntervalSince(last) >= 10
     }
 
     func refreshDue(now: Date = .now) async {
@@ -114,13 +120,19 @@ final class Refresher {
         }
     }
 
-    /// nil: no background refresh (Never).
+    /// nil: no background refresh (Never). Low Power Mode or a hot Mac stretch it to 30 min.
     func interval(for id: ProviderID, now: Date) -> TimeInterval? {
-        switch Prefs.refreshSetting {
+        let base: TimeInterval? = switch Prefs.refreshSetting {
         case Prefs.agentAwareInterval: AgentActivity.interval(lastActivity: activity.lastActivity[id], now: now)
         case Prefs.neverInterval: nil
         default: Prefs.refreshInterval
         }
+        let info = ProcessInfo.processInfo
+        return base.map { Self.saving($0, lowPower: info.isLowPowerModeEnabled, thermal: info.thermalState) }
+    }
+
+    nonisolated static func saving(_ interval: TimeInterval, lowPower: Bool, thermal: ProcessInfo.ThermalState) -> TimeInterval {
+        lowPower || thermal == .serious || thermal == .critical ? max(interval, 30 * 60) : interval
     }
 
     func isDue(_ id: ProviderID, now: Date, interval: TimeInterval?) -> Bool {
@@ -192,6 +204,7 @@ final class Refresher {
                 for window in Self.resets(old: old, new: snapshot) where !Self.isOld(window, old: old, fromDisk: fromDisk, now: now) {
                     onReset?(id, window)
                 }
+                for (window, threshold) in Self.lowCrossings(old: old, new: snapshot, now: now) { onRunningLow?(id, window, threshold) }
             }
             fetchedThisLaunch.insert(id)
             state.snapshot = snapshot
@@ -237,6 +250,20 @@ final class Refresher {
                   let oldReset = before.resetsAt, let newReset = window.resetsAt
             else { return false }
             return newReset.timeIntervalSince(oldReset) > 10 * 60
+        }
+    }
+
+    nonisolated static let lowThresholds = [0.8, 0.95, 1.0]
+
+    /// The highest threshold each limit crossed between two snapshots. A limit that reset in
+    /// between counts from zero, so climbing again in the next window notifies again.
+    nonisolated static func lowCrossings(old: Snapshot, new: Snapshot, now: Date) -> [(UsageWindow, Double)] {
+        let resetIDs = Set(resets(old: old, new: new).map(\.id))
+        return new.windows.compactMap { window in
+            guard !window.hasReset(now: now), let before = old.windows.first(where: { $0.id == window.id }) else { return nil }
+            let from = resetIDs.contains(window.id) || before.hasReset(now: now) ? 0 : before.used
+            guard let threshold = lowThresholds.last(where: { from < $0 && window.used >= $0 }) else { return nil }
+            return (window, threshold)
         }
     }
 

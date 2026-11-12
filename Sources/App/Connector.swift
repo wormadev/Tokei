@@ -18,29 +18,45 @@ final class Connector {
         self.refresher = refresher
     }
 
-    func redeem(_ id: ProviderID, grantID: String) {
-        guard id == .claude, !redeeming.contains(id) else { return }
+    /// Request ids of spends the server hasn't answered yet, reused on retry.
+    @ObservationIgnored private var pendingClaims: [String: String] = [:]
+
+    /// Keyed by kind, not grant: after a spend the server answered but we never heard, the
+    /// spent grant can drop out of the list and the retry would target the next one.
+    func redeem(_ id: ProviderID, _ resets: BankedResets, grantID: String) {
+        guard !redeeming.contains(id) else { return }
         redeeming.insert(id)
         notices[id] = nil
+        let key = "\(id.rawValue)/\(resets.name)"
+        let requestID = pendingClaims[key] ?? UUID().uuidString.lowercased()
+        pendingClaims[key] = requestID
         Task {
-            let notice: String
+            defer { redeeming.remove(id) }
+            let outcome: RedeemOutcome
             do {
-                notice = try await ClaudeProvider.redeem(grantID: grantID)
+                outcome = switch id {
+                case .claude: try await ClaudeProvider.redeem(grantID: grantID, requestID: requestID)
+                case .codex: try await CodexProvider.redeem(creditID: grantID, requestID: requestID)
+                }
             } catch {
-                notice = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                outcome = .failure(error)
             }
-            notices[id] = notice
+            if outcome.settled { pendingClaims[key] = nil }
+            notices[id] = outcome.message
             await refresher.refreshAfterCurrent(id, userInitiated: true)
-            redeeming.remove(id)
-            // By now the card shows the new numbers; the notice has done its job.
-            try? await Task.sleep(for: .seconds(60))
-            if notices[id] == notice { notices[id] = nil }
+            if outcome.refilled {
+                // The usage endpoint can lag the reset by a few seconds.
+                try? await Task.sleep(for: .seconds(5))
+                await refresher.refresh(id, userInitiated: true)
+            }
+            try? await Task.sleep(for: .seconds(10))
+            if notices[id] == outcome.message { notices[id] = nil }
         }
     }
 
     /// The CLI's own status command, which may renew its expired token on the way. Tokei
     /// itself never touches the refresh token.
-    static let statusCommands: [ProviderID: (cli: String, arguments: [String])] = [
+    nonisolated static let statusCommands: [ProviderID: (cli: String, arguments: [String])] = [
         .claude: ("claude", ["auth", "status"]),
         .codex: ("codex", ["login", "status"]),
     ]
@@ -50,7 +66,7 @@ final class Connector {
     func renewSignIn(_ id: ProviderID, userInitiated: Bool) async -> Bool {
         guard let command = Self.statusCommands[id], !renewing.contains(id) else { return false }
         guard let cli = Executable.path(command.cli) else {
-            renewFailures[id] = ("Couldn't find \(command.cli). Run it in Terminal.", .now)
+            renewFailures[id] = ("Couldn't find `\(command.cli)` on this Mac.", .now)
             return false
         }
         renewing.insert(id)
@@ -66,7 +82,7 @@ final class Connector {
         // A 429 says nothing about the sign-in either way: no failure, no notification.
         if refresher.states[id]?.rateLimited == true { return true }
         guard refresher.states[id]?.needsSignIn != true else {
-            renewFailures[id] = ("Still expired. Open Terminal to run \(command.cli), then quit it with /exit.", .now)
+            renewFailures[id] = ("Still expired. Start `\(command.cli)` in Terminal to renew it, then quit with /exit.", .now)
             return false
         }
         return true

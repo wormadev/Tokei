@@ -28,15 +28,23 @@ struct CodexProvider: UsageProvider {
         Executable.exists("codex") || FileManager.default.fileExists(atPath: Self.authFile.path)
     }
 
-    func fetch(userInitiated: Bool) async throws -> Snapshot {
-        guard let data = try? Data(contentsOf: Self.authFile),
+    struct SignIn {
+        var headers: [String: String]
+        var idToken: String?
+        var expiresAt: Date?
+    }
+
+    static let rejected = "Signed out. Run `codex login` to sign in again."
+
+    static func signIn() throws -> SignIn {
+        guard let data = try? Data(contentsOf: authFile),
               let tokens = (try? JSONDecoder().decode(Auth.self, from: data))?.tokens
         else {
-            throw ProviderError.notConfigured("Run `codex login` to sign in.")
+            throw ProviderError.notConfigured("Not signed in. Run `codex login` to sign in.")
         }
         let expiresAt = JWT(tokens.access_token)?.expiresAt
         if let expiresAt, expiresAt <= .now {
-            throw ProviderError.signInExpired("Sign-in expired. Run `codex` once to refresh it.")
+            throw ProviderError.signInExpired("Sign-in expired")
         }
         var headers = [
             "Authorization": "Bearer \(tokens.access_token)",
@@ -44,22 +52,77 @@ struct CodexProvider: UsageProvider {
             "User-Agent": "Tokei",
         ]
         if let account = tokens.account_id { headers["ChatGPT-Account-Id"] = account }
-        let hint = "Codex rejected the sign-in. Run `codex login`."
-        let usage = try await HTTP.json(Usage.self, URLRequest("https://chatgpt.com/backend-api/wham/usage", headers: headers), unauthorizedHint: hint)
-        // Banked resets live on their own endpoint; usage still shows if it fails.
-        var creditHeaders = headers
-        creditHeaders["OpenAI-Beta"] = "codex-1"
-        creditHeaders["originator"] = "Codex Desktop"
-        let credits = try? await HTTP.json(
-            ResetCredits.self, URLRequest("https://chatgpt.com/backend-api/wham/rate-limit-reset-credits", headers: creditHeaders), unauthorizedHint: hint
+        return SignIn(headers: headers, idToken: tokens.id_token, expiresAt: expiresAt)
+    }
+
+    func fetch(userInitiated: Bool) async throws -> Snapshot {
+        let signIn = try Self.signIn()
+        let usage = try await HTTP.json(
+            Usage.self, URLRequest("https://chatgpt.com/backend-api/wham/usage", headers: signIn.headers), unauthorizedHint: Self.rejected
         )
-        var snapshot = Self.snapshot(usage: usage, idToken: tokens.id_token)
+        // Banked resets live on their own endpoint; usage still shows if it fails.
+        let credits = try? await HTTP.json(
+            ResetCredits.self, URLRequest("https://chatgpt.com/backend-api/wham/rate-limit-reset-credits", headers: Self.creditHeaders(signIn)),
+            unauthorizedHint: Self.rejected
+        )
+        var snapshot = Self.snapshot(usage: usage, idToken: signIn.idToken)
         snapshot.resets = Self.banked(credits).map { [$0] }
-        snapshot.signInExpiresAt = expiresAt
+        snapshot.signInExpiresAt = signIn.expiresAt
         return snapshot
     }
 
+    /// Spends one reset credit, as the Codex CLI does. The same `requestID` on a retry makes
+    /// it the same claim.
+    static func redeem(creditID: String, requestID: String) async throws -> RedeemOutcome {
+        let signIn = try signIn()
+        var request = URLRequest("https://chatgpt.com/backend-api/wham/rate-limit-reset-credits/consume", method: "POST", headers: creditHeaders(signIn))
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["redeem_request_id": requestID, "credit_id": creditID])
+        struct Consumed: Decodable { var code: String }
+        let consumed = try await HTTP.json(Consumed.self, request, unauthorizedHint: rejected)
+        return consumeOutcome(consumed.code)
+    }
+
+    /// What the reset credit endpoints are seen getting from the Codex app.
+    static func creditHeaders(_ signIn: SignIn) -> [String: String] {
+        var headers = signIn.headers
+        headers["OpenAI-Beta"] = "codex-1"
+        headers["originator"] = "Codex Desktop"
+        return headers
+    }
+
+    static func consumeOutcome(_ code: String) -> RedeemOutcome {
+        switch code {
+        case "reset", "already_redeemed": RedeemOutcome(message: "Limits refilled.", settled: true, refilled: true)
+        case "nothing_to_reset": RedeemOutcome(message: "You're not limited right now, so the reset is still banked.", settled: true)
+        case "no_credit": RedeemOutcome(message: "That reset is no longer available.", settled: true)
+        default: RedeemOutcome(message: "Codex didn't confirm the reset. Try again in a moment; it won't be spent twice.", settled: false)
+        }
+    }
+
     // MARK: - Parsing
+
+    static func windows(_ limit: Usage.RateLimit?, kind: UsageWindow.Kind) -> [UsageWindow] {
+        let slots = [("primary", limit?.primary_window), ("secondary", limit?.secondary_window)]
+        return slots
+            .compactMap { slot, window in window.flatMap { w in w.used_percent.map { (slot, w, $0) } } }
+            // The API has been seen returning them swapped; label by length instead of trusting the slot.
+            .sorted { ($0.1.limit_window_seconds ?? 0) < ($1.1.limit_window_seconds ?? 0) }
+            .map { slot, window, percent in
+                let seconds = window.limit_window_seconds
+                let isSession = seconds.map { $0 <= 6 * 3600 }
+                let label = seconds.map { $0 <= 6 * 3600 ? "Session" : $0 > 8 * 86400 ? "Monthly" : "Weekly" }
+                return UsageWindow(
+                    // Unknown length: keep slot-based ids so the two windows stay distinct.
+                    id: isSession.map { $0 ? "session" : "weekly" } ?? slot,
+                    label: label ?? slot.capitalized,
+                    kind: kind,
+                    used: percent / 100,
+                    resetsAt: window.reset_at.map { Date(timeIntervalSince1970: $0) },
+                    duration: seconds
+                )
+            }
+    }
 
     struct Usage: Decodable {
         struct Window: Decodable {
@@ -79,50 +142,57 @@ struct CodexProvider: UsageProvider {
             var balance: FlexibleDouble?
         }
 
+        /// Per-model limits, e.g. a Spark model with its own session and weekly windows.
+        struct Additional: Decodable {
+            var limit_name: String?
+            var rate_limit: RateLimit?
+        }
+
         var plan_type: String?
         var rate_limit: RateLimit?
+        /// Extra data: an unexpected shape here must not cost the main limits.
+        var additional_rate_limits: Lossy<[Additional]>?
         var credits: Credits?
     }
 
     struct ResetCredits: Decodable {
         struct Credit: Decodable {
+            var id: String?
             var status: String?
+            var reset_type: String?
             var expires_at: String?
         }
 
         var credits: [Credit]?
     }
 
+    /// The credit to spend is the one expiring soonest.
     static func banked(_ credits: ResetCredits?, now: Date = .now) -> BankedResets? {
         let available = (credits?.credits ?? []).filter { credit in
-            guard credit.status == "available" else { return false }
+            guard credit.status == "available", credit.reset_type.map({ $0 == "codex_rate_limits" }) ?? true else { return false }
             return ISODate.parse(credit.expires_at).map { $0 > now } ?? true
         }
         guard !available.isEmpty else { return nil }
-        return BankedResets(count: available.count, nextExpiry: available.compactMap { ISODate.parse($0.expires_at) }.min())
+        let next = available.min { (ISODate.parse($0.expires_at) ?? .distantFuture) < (ISODate.parse($1.expires_at) ?? .distantFuture) }
+        return BankedResets(
+            count: available.count, nextExpiry: available.compactMap { ISODate.parse($0.expires_at) }.min(), grantID: next?.id
+        )
     }
 
     static func snapshot(usage: Usage, idToken: String?, now: Date = .now) -> Snapshot {
-        let slots = [("primary", usage.rate_limit?.primary_window), ("secondary", usage.rate_limit?.secondary_window)]
-        let windows = slots
-            .compactMap { slot, window in window.flatMap { w in w.used_percent.map { (slot, w, $0) } } }
-            // The API has been seen returning them swapped; label by length instead of trusting the slot.
-            .sorted { ($0.1.limit_window_seconds ?? 0) < ($1.1.limit_window_seconds ?? 0) }
-            .map { slot, window, percent in
-                let seconds = window.limit_window_seconds
-                let isSession = seconds.map { $0 <= 6 * 3600 }
-                let label = seconds.map { $0 <= 6 * 3600 ? "Session" : $0 > 8 * 86400 ? "Monthly" : "Weekly" }
-                return UsageWindow(
-                    // Unknown length: keep slot-based ids so the two windows stay distinct.
-                    id: isSession.map { $0 ? "session" : "weekly" } ?? slot,
-                    label: label ?? slot.capitalized,
-                    kind: .primary,
-                    used: percent / 100,
-                    resetsAt: window.reset_at.map { Date(timeIntervalSince1970: $0) },
-                    duration: seconds
-                )
+        var windows = Self.windows(usage.rate_limit, kind: .primary)
+        for additional in usage.additional_rate_limits?.value ?? [] {
+            guard let name = additional.limit_name, !name.isEmpty else { continue }
+            let slug = name.lowercased().replacingOccurrences(of: " ", with: "-")
+            windows += Self.windows(additional.rate_limit, kind: .secondary).map { window in
+                var window = window
+                window.id = "\(slug)-\(window.id)"
+                window.label = "\(name) \(window.label.lowercased())"
+                return window
             }
-            .withUniqueIDs()
+        }
+        windows = windows.withUniqueIDs()
+
         var details: [Detail] = []
         if let credits = usage.credits {
             if credits.unlimited == true {

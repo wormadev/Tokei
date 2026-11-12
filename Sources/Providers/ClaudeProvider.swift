@@ -53,7 +53,7 @@ struct ClaudeProvider: UsageProvider {
         if let file, !file.isExpired { return file }
         if let keychain = try readKeychain(userInitiated: userInitiated) { return keychain }
         if let file { return file }
-        throw ProviderError.notConfigured("Run `claude` and sign in.")
+        throw ProviderError.notConfigured("Not signed in. Run `claude` to sign in.")
     }
 
     #if DEBUG
@@ -74,11 +74,11 @@ struct ClaudeProvider: UsageProvider {
 
     func fetch(userInitiated: Bool) async throws -> Snapshot {
         let credentials = try Self.resolveCredentials(userInitiated: userInitiated)
-        guard let oauth = credentials.claudeAiOauth else { throw ProviderError.notConfigured("Run `claude` and sign in.") }
-        let hint = "Claude rejected the sign-in. Run `claude` and sign in again."
+        guard let oauth = credentials.claudeAiOauth else { throw ProviderError.notConfigured("Not signed in. Run `claude` to sign in.") }
+        let hint = Self.rejected
         if Self.debugExpired { throw ProviderError.unauthorized(hint) }
         if credentials.isExpired {
-            throw ProviderError.signInExpired("Sign-in expired. Run `claude` once to refresh it.")
+            throw ProviderError.signInExpired(Self.expired)
         }
         let headers = Self.requestHeaders(token: oauth.accessToken)
         let usage: Usage
@@ -127,7 +127,8 @@ struct ClaudeProvider: UsageProvider {
             }
 
             var kind: String?
-            var percent: Double?
+            /// Sometimes a string ("11").
+            var percent: FlexibleDouble?
             var resets_at: String?
             var scope: Scope?
         }
@@ -180,14 +181,17 @@ struct ClaudeProvider: UsageProvider {
             init(from decoder: Decoder) {}
         }
 
-        enum CodingKeys: String, CodingKey { case eligible, grants }
+        enum CodingKeys: String, CodingKey { case eligible, grants, next_grant_id }
 
         var eligible: Bool?
         var grants: [Grant]?
+        /// The grant Claude Code would spend next.
+        var next_grant_id: String?
 
         init(from decoder: Decoder) throws {
             guard let container = try? decoder.container(keyedBy: CodingKeys.self) else { return }
             eligible = try? container.decodeIfPresent(Bool.self, forKey: .eligible)
+            next_grant_id = try? container.decodeIfPresent(String.self, forKey: .next_grant_id)
             guard var list = try? container.nestedUnkeyedContainer(forKey: .grants) else { return }
             var grants: [Grant] = []
             while !list.isAtEnd {
@@ -215,41 +219,45 @@ struct ClaudeProvider: UsageProvider {
             let grants = live.filter { $0.kind == kind }
             let count = grants.reduce(0) { $0 + ($1.resets_left ?? 0) }
             guard count > 0 else { return nil }
-            let next = grants.first { $0.id != nil && $0.usable_now == true }
+            let usable = grants.filter { $0.id != nil && $0.usable_now == true }
+            // Claude's own pick first, so a reset spends the grant Claude Code would.
+            let next = usable.first { $0.id == cedar.next_grant_id } ?? usable.first
             return BankedResets(kind: kind, count: count, nextExpiry: grants.compactMap { ISODate.parse($0.ends_at) }.min(), grantID: next?.id)
         }
     }
 
-    /// Spends one banked reset. Each call gets a fresh request id, so it's one claim per click.
-    static func redeem(grantID: String) async throws -> String {
+    /// Spends one banked reset. The same `requestID` on a retry makes it the same claim.
+    static func redeem(grantID: String, requestID: String) async throws -> RedeemOutcome {
         let credentials = try resolveCredentials(userInitiated: true)
         guard let oauth = credentials.claudeAiOauth, !credentials.isExpired else {
-            throw ProviderError.unauthorized("Sign-in expired. Run `claude` once to refresh it.")
+            throw ProviderError.unauthorized(Self.expired)
         }
         let headers = requestHeaders(token: oauth.accessToken)
-        let hint = "Claude rejected the sign-in. Run `claude` and sign in again."
+        let hint = Self.rejected
         let profile = try await HTTP.json(Profile.self, URLRequest("https://api.anthropic.com/api/oauth/profile", headers: headers), unauthorizedHint: hint)
         guard let org = profile.organization?.uuid else { throw ProviderError.badResponse("no organization") }
         var request = URLRequest("https://api.anthropic.com/api/organizations/\(org)/reset_rate_limits", method: "POST", headers: headers)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: [
-            "program": "cedar_ember", "grant_id": grantID, "request_id": UUID().uuidString.lowercased(),
+            "program": "cedar_ember", "grant_id": grantID, "request_id": requestID,
         ])
         struct Claim: Decodable { var result: String }
         let claim = try await HTTP.json(Claim.self, request, unauthorizedHint: hint)
-        return claimMessage(claim.result)
+        return claimOutcome(claim.result)
     }
 
-    static func claimMessage(_ result: String) -> String {
+    static func claimOutcome(_ result: String) -> RedeemOutcome {
         switch result {
-        case "reset": "Limits reset. Fresh quota is available."
-        case "not_limited": "Nothing to reset right now. The reset is still banked."
-        case "already_used": "That reset was already used."
-        case "cooldown": "Claude is cooling down. Try again shortly."
-        case "ineligible": "This account can't use banked resets."
-        default: "Claude couldn't confirm the reset. Refresh to check."
+        case "reset", "already_used": RedeemOutcome(message: "Limits refilled.", settled: true, refilled: true)
+        case "not_limited": RedeemOutcome(message: "You're not limited right now, so the reset is still banked.", settled: true)
+        case "cooldown": RedeemOutcome(message: "Claude is cooling down. Try again in a minute.", settled: true)
+        case "ineligible": RedeemOutcome(message: "This account can't use banked resets.", settled: true)
+        default: RedeemOutcome(message: "Claude didn't confirm the reset. Try again in a moment; it won't be spent twice.", settled: false)
         }
     }
+
+    static let expired = "Sign-in expired"
+    static let rejected = "Signed out. Run `claude` to sign in again."
 
     private static let profiles = Mutex<[String: Profile]>([:])
 
@@ -326,10 +334,15 @@ struct ClaudeProvider: UsageProvider {
     static let sessionLength: TimeInterval = 5 * 3600
     static let weekLength: TimeInterval = 7 * 86400
 
+    /// A session reported without a number hasn't started: no message yet in this window.
+    /// Weekly-only plans leave the session out entirely, so none is invented then.
     static func windows(from limits: [Usage.Limit]) -> [UsageWindow] {
         limits.compactMap { limit in
-            guard let percent = limit.percent else { return nil }
             let resets = ISODate.parse(limit.resets_at)
+            guard let percent = limit.percent?.value else {
+                guard limit.kind == "session" else { return nil }
+                return UsageWindow(id: "session", label: "Session", kind: .primary, used: 0, resetsAt: nil, duration: Self.sessionLength)
+            }
             switch limit.kind {
             case "session":
                 return UsageWindow(id: "session", label: "Session", kind: .primary, used: percent / 100, resetsAt: resets, duration: Self.sessionLength)
@@ -352,9 +365,11 @@ struct ClaudeProvider: UsageProvider {
             ("weekly-sonnet", "Sonnet weekly", .secondary, usage.seven_day_sonnet),
         ]
         return entries.compactMap { id, label, kind, window -> UsageWindow? in
-            guard let utilization = window?.utilization else { return nil }
+            guard let window else { return nil }
+            // Same as the limits array: a session object without a number hasn't started.
+            guard let utilization = window.utilization ?? (id == "session" ? 0 : nil) else { return nil }
             return UsageWindow(
-                id: id, label: label, kind: kind, used: utilization / 100, resetsAt: ISODate.parse(window?.resets_at),
+                id: id, label: label, kind: kind, used: utilization / 100, resetsAt: ISODate.parse(window.resets_at),
                 duration: id == "session" ? Self.sessionLength : Self.weekLength
             )
         }

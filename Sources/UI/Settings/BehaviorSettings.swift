@@ -8,8 +8,8 @@ struct RefreshSettings: View {
     private var explanation: String {
         let background = switch interval {
         case Prefs.agentAwareInterval: "Every 5 minutes while Claude Code or Codex is working, every 15 minutes when idle."
-        case Prefs.neverInterval: refreshOnOpen ? "Usage updates only when you open the panel (if older than 2 minutes)." : "Usage updates only when you press Refresh (⌘R)."
-        default: refreshOnOpen ? "Opening the panel also refreshes anything older than 2 minutes." : ""
+        case Prefs.neverInterval: refreshOnOpen ? "Usage updates only when you open the panel." : "Usage updates only when you press Refresh (⌘R)."
+        default: ""
         }
         return [background, interval == Prefs.neverInterval ? "" : "Pauses while the Mac sleeps or is locked."]
             .filter { !$0.isEmpty }.joined(separator: " ")
@@ -35,22 +35,31 @@ struct RefreshSettings: View {
 struct AlertSettings: View {
     @AppStorage(Prefs.notifyResetsKey) private var notifyResets = true
     @AppStorage(Prefs.notifySignInKey) private var notifySignIn = true
+    @AppStorage(Prefs.notifyLowKey) private var notifyLow = true
+    @AppStorage(Prefs.notifyUnusedKey) private var notifyUnused = false
+    @AppStorage(Prefs.notifyBankedKey) private var notifyBanked = true
     @AppStorage(Prefs.renewSignInKey) private var renewSignIn = false
 
     var body: some View {
-        Toggle("Notify when a limit resets", isOn: $notifyResets)
-            .onChange(of: notifyResets) { _, on in
-                if on { Notifier.requestPermissionIfEnabled() }
-            }
-        Toggle("Notify when a sign-in expires", isOn: $notifySignIn)
-            .onChange(of: notifySignIn) { _, on in
-                if on { Notifier.requestPermissionIfEnabled() }
-            }
+        notify("Notify when a limit runs low", $notifyLow)
+            .help("At 80% and 95% used, when used up, and when the pace says it runs out before the reset")
+        notify("Notify when a limit resets", $notifyResets)
+        notify("Notify when unused weekly quota is about to reset", $notifyUnused)
+            .help("A day and an hour before, when a quarter or more is left")
+        notify("Notify when a banked reset is about to expire", $notifyBanked)
+        notify("Notify when a sign-in expires", $notifySignIn)
         VStack(alignment: .leading, spacing: 2) {
             Toggle("Renew expired sign-ins", isOn: $renewSignIn)
-            Text("Runs `claude auth status` or `codex login status` when a sign-in expires. That often lets the CLI renew its own token. You're notified only if it doesn't.")
+            Text("Runs `claude auth status` or `codex login status`, which usually renews the sign-in. You're notified only when it doesn't.")
                 .font(.caption).foregroundStyle(.secondary)
         }
+    }
+
+    private func notify(_ title: String, _ isOn: Binding<Bool>) -> some View {
+        Toggle(title, isOn: isOn)
+            .onChange(of: isOn.wrappedValue) { _, on in
+                if on { Notifier.requestPermissionIfEnabled() }
+            }
     }
 }
 

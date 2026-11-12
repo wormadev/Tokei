@@ -50,10 +50,11 @@ enum TimeText {
                 ? date.formatted(date: .omitted, time: .shortened)
                 : date.formatted(.dateTime.weekday(.abbreviated).hour().minute())
         }
-        let minutes = Int(max(0, date.timeIntervalSince(now)) / 60)
+        // Rounded up, so a reset 30 s away reads "in 1m", never "in 0m".
+        let minutes = Int((max(0, date.timeIntervalSince(now)) / 60).rounded(.up))
         let (days, hours, mins) = (minutes / 1440, minutes % 1440 / 60, minutes % 60)
-        if days > 0 { return "in \(days)d \(hours)h" }
-        if hours > 0 { return "in \(hours)h \(mins)m" }
+        if days > 0 { return hours > 0 ? "in \(days)d \(hours)h" : "in \(days)d" }
+        if hours > 0 { return mins > 0 ? "in \(hours)h \(mins)m" : "in \(hours)h" }
         return "in \(max(mins, 1))m"
     }
 }
